@@ -1,0 +1,120 @@
+"""Parsing names: guessit plus config rules, overrides, folder against file."""
+
+import pytest
+
+from tidyshelf.parse import Parsed, decide_movie, find_override, parse_name
+
+
+def P(title=None, year=None, kind="movie"):
+    return Parsed(title=title, year=year, kind=kind, season=None, episodes=(), episode_title=None)
+
+
+# Pins guessit's behaviour on these invented names: an upgrade that changes it fails here first.
+@pytest.mark.parametrize("name, title, year, kind", [
+    ("Winter.Lights.2004.1080p.BluRay.x264.AAC-GRP.mp4", "Winter Lights", 2004, "movie"),
+    ("www.example.com - Winter Lights (2004) 1080p BluRay-GRP", "Winter Lights", 2004, "movie"),
+    ("Winter Lights (2004) [ES]", "Winter Lights", 2004, "movie"),
+    ("the.lost.city.1999.720p.mkv", "The Lost City", 1999, "movie"),
+    ("THE LOST CITY 1999.mkv", "The Lost City", 1999, "movie"),
+    ("McQueen and the River 2001.mkv", "McQueen and the River", 2001, "movie"),
+    ("Some.Show.S01E02.720p.mkv", "Some Show", None, "series"),
+    ("1080p.x264.mkv", None, None, "movie"),
+])
+def test_parse_name(cfg, name, title, year, kind):
+    p = parse_name(name, cfg, [])
+    assert (p.title, p.year, p.kind) == (title, year, kind)
+
+
+def test_series_fields(cfg):
+    p = parse_name("Some.Show.S01E02E03.720p.mkv", cfg, [])
+    assert (p.season, p.episodes) == (1, (2, 3))
+
+
+def test_title_of_only_junk_is_none(cfg):
+    assert parse_name("x264 HEVC 1999.mkv", cfg, []).title is None
+
+
+def test_extra_tokens_count_as_junk(cfg):
+    cfg["parse"]["extra_tokens"] = ["homecut"]
+    assert parse_name("HomeCut.1999.mkv", cfg, []).title is None
+
+
+def test_title_rules_applied_in_order(cfg):
+    cfg["parse"]["title_rules"] = [{"match": r"^Example Site$", "replace": "Winter Lights"},
+                                   {"match": r"Lights", "replace": "Light"}]
+    p = parse_name("Example.Site.2004.mkv", cfg, trace := [])
+    assert p.title == "Winter Light"
+    assert sum("title rule" in line for line in trace) == 2
+
+
+def test_trace_explains_each_step(cfg):
+    trace = []
+    parse_name("the.lost.city.1999.720p.mkv", cfg, trace)
+    assert any("guessit" in line and "the lost city" in line for line in trace)
+    assert any("title case" in line for line in trace)
+
+
+@pytest.mark.parametrize("match", ["Winter*", "re:^www\\.", "*2004*"])
+def test_override_glob_and_regex(cfg, match):
+    cfg["override"] = [{"match": "Other*"}, {"match": match, "year": 2005}]
+    assert find_override("www.example.com - Winter Lights (2004)" if "www" in match else "Winter Lights 2004", cfg) \
+        == {"match": match, "year": 2005}
+
+
+def test_override_none(cfg):
+    cfg["override"] = [{"match": "Other*"}]
+    assert find_override("Winter Lights", cfg) is None
+
+
+def test_first_override_wins(cfg):
+    cfg["override"] = [{"match": "W*", "year": 1}, {"match": "Wi*", "year": 2}]
+    assert find_override("Winter", cfg)["year"] == 1
+
+
+def test_override_wins_and_is_reported(cfg):
+    d = decide_movie(P("Winter Lights", 2004), P("Winter Lights", 2004), {"match": "W*", "title": "Winter Light"}, cfg, [])
+    assert (d.title, d.year) == ("Winter Light", 2004)
+    assert [c for _l, c, _m in d.findings] == ["parse.override"]
+
+
+def test_override_ignore(cfg):
+    assert decide_movie(None, P("A", 2000), {"match": "A*", "ignore": True}, cfg, []).ignore is True
+
+
+def test_override_kind(cfg):
+    assert decide_movie(None, P("A", 2000), {"match": "A*", "kind": "series"}, cfg, []).kind == "series"
+
+
+def test_folder_beats_file_on_year(cfg):
+    d = decide_movie(P("Winter Lights", 2004), P("Winter Lights", 2005), None, cfg, [])
+    assert d.year == 2004
+    assert [c for _l, c, _m in d.findings] == ["parse.folder_file_disagree"]
+
+
+def test_file_beats_folder_when_configured(cfg):
+    cfg["parse"]["folder_beats_file"] = False
+    assert decide_movie(P("Winter Lights", 2004), P("Winter Lights", 2005), None, cfg, []).year == 2005
+
+
+def test_missing_field_taken_from_the_other_name(cfg):
+    d = decide_movie(P("Winter Lights", None), P(None, 2004), None, cfg, [])
+    assert (d.title, d.year, d.findings) == ("Winter Lights", 2004, [])
+
+
+def test_missing_year_needs_review(cfg):
+    assert decide_movie(None, P("Winter Lights", None), None, cfg, []).review == "no year found"
+
+
+def test_missing_title_needs_review(cfg):
+    assert decide_movie(None, P(None, 2004), None, cfg, []).review == "no title found"
+
+
+def test_series_if_either_name_is_series(cfg):
+    assert decide_movie(P("Show", None, "series"), P("Show", None), None, cfg, []).kind == "series"
+
+
+@pytest.mark.parametrize("title, junk", [("www.example.com", True), ("example.org", True),
+                                         ("Winter Lights", False), ("Lights of Example Com", False)])
+def test_title_that_is_a_web_address_is_junk(title, junk):
+    from tidyshelf.parse import _is_junk
+    assert _is_junk(title, set()) is junk
