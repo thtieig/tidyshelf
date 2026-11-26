@@ -10,7 +10,7 @@ readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
 requires-python = ">=3.11"
-dependencies = []
+dependencies = ["guessit>=3.8,<4"]
 
 [project.optional-dependencies]
 dev = ["pytest>=7", "build", "setuptools>=77", "wheel"]

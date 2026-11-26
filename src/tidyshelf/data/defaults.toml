@@ -35,7 +35,8 @@ series = ""
 preset = "kodi"
 # Templates. Placeholders in {braces}; numbers take a format like {season:02}.
 # A segment inside <angle brackets> is left out when any placeholder in it is empty,
-# e.g. "< - {episode_title}>" (< and > can never appear in a real file name).
+# e.g. "< - {episode_title}>". The brackets are read before values are filled in, so a title
+# that itself contains < or > is copied as text, never taken as a marker.
 # Characters illegal on common filesystems (: * ? " < > |) are removed from every generated name.
 # Movie folder. Placeholders: {title} {year}
 movie_folder = "{title} ({year})"
