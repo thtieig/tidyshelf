@@ -8,7 +8,7 @@ import os
 import sys
 from pathlib import Path
 
-from tidyshelf import __version__, config
+from tidyshelf import __version__, config, movies
 
 INIT_TEMPLATE = """\
 # tidyshelf config. Only the three folders below are needed; every other setting has a default.
@@ -74,6 +74,15 @@ def build_parser() -> argparse.ArgumentParser:
     cfg_sub = p_cfg.add_subparsers(dest="config_command", metavar="ACTION")
     for name, text in (("check", "validate the effective config"), ("show", "print the effective config as JSON")):
         _common(cfg_sub.add_parser(name, help=text), top=False)
+
+    p_plan = sub.add_parser("plan", help="plan how to tidy the source folder (changes nothing)")
+    _common(p_plan, top=False)
+    p_plan.add_argument("paths", nargs="*", metavar="PATH", help="what to plan (default: the whole source root)")
+    p_plan.add_argument("--out", metavar="FILE", help="write the plan to FILE, or - for stdout")
+
+    p_explain = sub.add_parser("explain", help="show why one item is planned the way it is")
+    _common(p_explain, top=False)
+    p_explain.add_argument("path", metavar="PATH", help="a folder or file in the source root")
     return parser
 
 
@@ -124,6 +133,111 @@ def cmd_config_show(args, out: _Out) -> int:
     return 0
 
 
+def _planning_config(args, out: _Out):
+    """The effective config for planning: valid, and all three roots must exist."""
+    cfg, _sources, report = _load(args)
+    errors = list(report.errors)
+    if cfg is not None and not errors:
+        errors += [f"roots.{name}: {path} does not exist" for name, path in cfg["roots"].items()
+                   if not os.path.isdir(path)]
+    for msg in errors:
+        out.error(msg)
+    return None if errors else cfg
+
+
+def _target(item: dict) -> str | None:
+    for op in item["ops"]:
+        if op["op"] == "mkdir" and op["path"].startswith(("movies:", "series:")):
+            return op["path"].split("/", 1)[0]
+    return None
+
+
+def _exit_code(items: list[dict]) -> int:
+    if any(it["status"] == "needs_review" for it in items):
+        return 4
+    return 2 if any(it["ops"] for it in items) else 0
+
+
+def _summary_lines(items: list[dict], pid: str, out_path: str | None) -> list[str]:
+    lines = []
+    for it in items:
+        target = _target(it)
+        lines.append(f"{it['id']}  {it['status']}  {it['source']}" + (f" -> {target}" if target else ""))
+        lines += [f"    {f['level']}: {f['code']}: {f['msg']}" for f in it["findings"]]
+    counts = {s: sum(1 for it in items if it["status"] == s) for s in ("ready", "needs_review", "skipped")}
+    lines.append(f"plan {pid}: {len(items)} items ({counts['ready']} ready, {counts['needs_review']} needs review, "
+                 f"{counts['skipped']} skipped)")
+    if out_path and out_path != "-":
+        lines.append(f"To apply: tidyshelf-apply {out_path}")
+    return lines
+
+
+def _write_atomic(path: Path, text: str) -> None:
+    tmp = path.with_name(f".{path.name}.tmp")
+    tmp.write_text(text, encoding="utf-8")
+    os.replace(tmp, path)
+
+
+def cmd_plan(args, out: _Out) -> int:
+    cfg = _planning_config(args, out)
+    if cfg is None:
+        return 1
+    if args.out and args.out != "-":
+        real = os.path.realpath(args.out)
+        for name, root in cfg["roots"].items():
+            base = os.path.realpath(root)
+            if os.path.commonpath([real, base]) == base:
+                out.error(f"--out {args.out}: is inside roots.{name}; write the plan somewhere else")
+                return 1
+    try:
+        plan, _traces = movies.build_plan(cfg, args.paths or None)
+    except ValueError as exc:
+        out.error(str(exc))
+        return 1
+    doc = plan.to_dict()
+    pid, code = plan.plan_id, _exit_code(doc["items"])
+    if args.out == "-":
+        sys.stdout.write(plan.dumps())
+    elif args.out:
+        _write_atomic(Path(args.out), plan.dumps())
+    if args.json:
+        summary = {"plan_id": pid, "exit": code, "items": [
+            {"id": it["id"], "status": it["status"], "kind": it["kind"], "source": it["source"],
+             "target": _target(it), "findings": it["findings"]} for it in doc["items"]]}
+        print(json.dumps(summary, indent=2, ensure_ascii=False), file=sys.stderr if args.out == "-" else sys.stdout)
+    elif not args.quiet:
+        stream = sys.stderr if args.out == "-" else sys.stdout
+        for line in _summary_lines(doc["items"], pid, args.out):
+            print(line, file=stream)
+    return code
+
+
+def cmd_explain(args, out: _Out) -> int:
+    cfg = _planning_config(args, out)
+    if cfg is None:
+        return 1
+    try:
+        plan, traces = movies.build_plan(cfg, [args.path])
+    except ValueError as exc:
+        out.error(str(exc))
+        return 1
+    (item,) = plan.to_dict()["items"]
+    trace = traces[item["id"]]
+    if args.json:
+        print(json.dumps({"source": item["source"], "trace": trace, "item": item}, indent=2, ensure_ascii=False))
+        return 0
+    out.info(f"{item['source']}")
+    for line in trace:
+        out.info(f"  {line}")
+    out.info(f"status: {item['status']}")
+    for f in item["findings"]:
+        out.info(f"  {f['level']}: {f['code']}: {f['msg']}")
+    for op in item["ops"]:
+        where = op.get("path") or f"{op['from']} -> {op['to']}"
+        out.info(f"  {op['op']:<8} {where}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     try:
@@ -137,6 +251,10 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_config_check(args, out)
     if args.command == "config" and args.config_command == "show":
         return cmd_config_show(args, out)
+    if args.command == "plan":
+        return cmd_plan(args, out)
+    if args.command == "explain":
+        return cmd_explain(args, out)
     parser.print_usage(sys.stderr)
     return 1
 
