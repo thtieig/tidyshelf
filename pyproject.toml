@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=77", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tidyshelf"
+version = "0.1.0.dev0"
+description = "Tidy a folder of video files into a consistently named library. Plan first, apply safely."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.11"
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=7", "build", "setuptools>=77", "wheel"]
+
+[project.scripts]
+tidyshelf = "tidyshelf.cli:main"
+tidyshelf-apply = "tidyshelf_apply:main"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+packages = ["tidyshelf"]
+py-modules = ["tidyshelf_apply"]
+
+[tool.setuptools.package-data]
+tidyshelf = ["data/*.toml", "data/stopwords/*.txt"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

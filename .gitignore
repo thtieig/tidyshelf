@@ -1,0 +1,14 @@
+# everything private lives here: notes, plans, denylist, real listings
+local/
+.venv/
+__pycache__/
+.claude/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+plan*.json
+*.journal.jsonl
+# personal configs written by `tidyshelf init` hold real paths
+/*.toml
+!/pyproject.toml

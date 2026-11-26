@@ -1,0 +1,211 @@
+# tidyshelf built-in defaults.
+#
+# Every key tidyshelf understands is listed here with its default value. Your own config only needs
+# the keys you want to change; everything else is inherited from this file.
+# Layers, last wins: this file -> /etc/tidyshelf.toml -> ~/.config/tidyshelf/config.toml
+#                    -> --config FILE (or the TIDYSHELF_CONFIG environment variable).
+# Tables are merged key by key; a list in your config replaces the default list completely.
+# Unknown keys are errors (`tidyshelf config check` catches typos).
+# See docs/NAMING.md for the naming standard these defaults implement.
+
+# Per-item decisions, as [[override]] blocks (none by default). Each block has:
+#   match  = glob or regex ("re:" prefix) on the item's source path, required
+#   title, year, kind ("movie" | "series"), season  = force these values
+#   ignore = true  never touch this item
+# Example:
+#   [[override]]
+#   match = "Some.Folder.Name*"
+#   title = "Some Title"
+#   year = 1999
+override = []
+
+[roots]
+# Named folders. Plans only ever refer to these names ("source:Some/file.mkv"), never to absolute
+# paths, so one plan works on your PC and on the NAS even if they mount the folders differently.
+# All three are required, must be absolute, and must not overlap or be nested in each other.
+# The old collection, to be tidied.
+source = ""
+# The movie library.
+movies = ""
+# The series library.
+series = ""
+
+[naming]
+# Naming preset. Only "kodi" exists today (also read by Jellyfin, Plex and Emby).
+preset = "kodi"
+# Templates. Placeholders in {braces}; numbers take a format like {season:02}.
+# A segment inside <angle brackets> is left out when any placeholder in it is empty,
+# e.g. "< - {episode_title}>" (< and > can never appear in a real file name).
+# Characters illegal on common filesystems (: * ? " < > |) are removed from every generated name.
+# Movie folder. Placeholders: {title} {year}
+movie_folder = "{title} ({year})"
+# Movie file name without extension. Placeholders: {title} {year}
+movie_file = "{title} ({year})"
+# Folder for a movie's subtitles, inside the movie folder.
+movie_subs_folder = "Subs"
+# Season folder, no zero padding. Placeholders: {season}
+season_folder = "Season {season}"
+# Folder for specials (season 0).
+specials_folder = "Season 00"
+# Episode file name without extension. Placeholders: {title} (the show) {season} {episode}
+# {episodes} ("E02", or "E23-E24" for a multi-episode file) {episode_title}
+episode_file = "S{season:02}{episodes}< - {episode_title}>"
+# How {episodes} joins a multi-episode range: "E23" + episode_join + "24" -> "E23-E24".
+episode_join = "-E"
+# Subtitle file name without extension. Placeholders: {video} (the video's name without
+# extension) {lang} (ISO 639-1, lowercase) {variant} ("sdh", "forced" or empty)
+subtitle_file = "{video}.{lang}<.{variant}>"
+
+[parse]
+# Words that are release/encoding details, never part of a title (matched case-insensitively,
+# as whole tokens). Generic technical terms only.
+junk_tokens = [
+  "480p", "576p", "720p", "1080p", "1080i", "2160p", "4k", "uhd",
+  "x264", "x265", "h264", "h265", "h.264", "h.265", "hevc", "avc", "xvid", "divx", "10bit", "8bit",
+  "bluray", "blu-ray", "bdrip", "brrip", "bdremux", "remux", "webrip", "web-dl", "webdl", "web",
+  "hdtv", "dvdrip", "dvd", "hdrip", "hdr", "hdr10", "dv", "sdr",
+  "aac", "ac3", "eac3", "dd5.1", "ddp5.1", "dts", "dts-hd", "truehd", "atmos", "flac", "mp3",
+  "5.1", "7.1", "2.0", "proper", "repack", "extended", "unrated", "remastered", "internal",
+  "multi", "dual", "subbed", "dubbed",
+]
+# Your own extra junk tokens, added to junk_tokens.
+extra_tokens = []
+# Title clean-up rules, applied in order after parsing, as [[parse.title_rules]] blocks:
+#   match = regex, replace = replacement text (\1 for groups). None by default.
+title_rules = []
+# When the folder name and the file name disagree on title or year, trust the folder.
+folder_beats_file = true
+# Folders inside a show folder that hold extras and are left untouched.
+extras_folders = ["Featurettes", "Extras"]
+
+[video]
+# Files with these extensions are videos (lowercase, with the dot).
+extensions = [".mkv", ".mp4", ".avi", ".m4v", ".wmv", ".ts", ".mpg", ".mpeg", ".mov", ".flv"]
+
+[video.quality]
+# Quality policy, checked with ffprobe. Each check has an action: "ok" | "warn" | "reject".
+# Video codecs that pass the codec check.
+allowed_codecs = ["h264", "hevc", "av1", "vp9", "mpeg4"]
+# Videos shorter than this are flagged low_res.
+min_height = 480
+# A video without an audio track is flagged no_audio.
+audio_required = true
+# Action when a file is above its class limits (size or bitrate).
+on_large = "warn"
+# Action when a file is suspiciously small for its duration.
+on_tiny = "warn"
+# Action when the codec is not in allowed_codecs.
+on_codec = "warn"
+# Action when the height is below min_height.
+on_low_res = "warn"
+# Action when there is no audio and audio_required is true.
+on_no_audio = "reject"
+
+# Limits per resolution class. Classes by height: sd < 720 <= hd < 1080 <= fhd < 2160 <= uhd.
+[video.quality.sd]
+# Above this many GB per hour of running time the file is "large".
+max_gb_per_hour = 1.5
+# Below this many GB per hour the file is "tiny".
+min_gb_per_hour = 0.2
+# Above this video bitrate (kbit/s) the file is "large".
+max_video_kbps = 3000
+
+[video.quality.hd]
+# See [video.quality.sd].
+max_gb_per_hour = 2.5
+# See [video.quality.sd].
+min_gb_per_hour = 0.3
+# See [video.quality.sd].
+max_video_kbps = 6000
+
+[video.quality.fhd]
+# See [video.quality.sd].
+max_gb_per_hour = 4.0
+# See [video.quality.sd].
+min_gb_per_hour = 0.5
+# See [video.quality.sd].
+max_video_kbps = 10000
+
+[video.quality.uhd]
+# See [video.quality.sd].
+max_gb_per_hour = 12.0
+# See [video.quality.sd].
+min_gb_per_hour = 1.5
+# See [video.quality.sd].
+max_video_kbps = 30000
+
+[subtitles]
+# Languages to keep (lowercase ISO 639-1). Subtitles in any other language are junk.
+languages = ["en", "es", "it"]
+# Language assumed when a lone subtitle has no detectable language and no tag.
+default_language = "en"
+# Files with these extensions are subtitles (.idx + .sub are VobSub pairs, kept together).
+extensions = [".srt", ".ass", ".ssa", ".sub", ".idx", ".vtt"]
+# Folders (next to the video) searched for subtitles, besides the video's own folder.
+folder_names = ["Subs", "Subtitles", "Sub", "Subtitle"]
+# Which variant wins when a language has several: "plain" | "sdh".
+prefer = "plain"
+# Also keep the SDH variant next to the preferred plain one.
+keep_sdh_alongside = false
+# File-name markers for SDH / hearing-impaired subtitles (whole tokens, case-insensitive).
+sdh_markers = ["sdh", "hi", "cc"]
+# File-name markers for forced subtitles.
+forced_markers = ["forced"]
+# How the language is detected from the text: "stopwords" (count common words per language).
+detection = "stopwords"
+# Minimum share of matched words (0..1) to trust a detected language.
+min_confidence = 0.6
+# Regexes for advertising cues at the start or end of a subtitle (reported, never removed in v1).
+ad_patterns = [
+  '(?i)\bwww\.',
+  '(?i)https?://',
+  '(?i)\b[a-z0-9-]+\.(com|net|org|info)\b',
+  '(?i)\bsubtitles?\s+(by|from)\b',
+  '(?i)\bsync(ed|hronized)?\s+(and\s+corrected\s+)?by\b',
+]
+# Your own extra ad patterns. Keep site-specific ones in your machine's config, not in a shared repo.
+ad_patterns_extra = []
+
+[junk]
+# Anything that is not a video or a subtitle (by extension) is junk.
+# What happens to junk: "trash" (moved to source:.tidyshelf-trash/, reversible) | "delete".
+junk_action = "trash"
+# Regexes on file names that are junk even with a video or subtitle extension.
+patterns = [
+  '(?i)(^|[._ -])sample([._ -]|$)',
+  '(?i)\.disable\.',
+  '(?i)^thumbs\.db$',
+]
+
+[exclude]
+# Regexes on plan paths ("root:relative/path") that are never touched, by the planner or the
+# executor. Example: '^movies:_keep-out(/|$)'
+patterns = []
+
+[conflicts]
+# When the library already has the same movie or episode: "report" (show both, do nothing)
+# | "skip" (do nothing, quietly).
+on_exists = "report"
+
+[safety]
+# Refuse a run that deletes more than this many files (empty-directory removals not counted)...
+max_delete_files = 200
+# ...or more than this many bytes, unless --allow-large-delete is given.
+max_delete_bytes = 52428800
+# Refuse plans older than this ("30m", "24h", "7d"); empty = no limit.
+max_age = ""
+# Require --approve PLAN_ID on every --execute.
+require_approve = false
+
+[owner]
+# Ownership and permissions for files and folders tidyshelf creates or moves (only applied by
+# explicit set_mode operations, and chown only when running with enough privilege).
+# Empty = leave as is.
+# User name.
+user = ""
+# Group name.
+group = ""
+# Octal mode for directories, e.g. "0775".
+dir_mode = ""
+# Octal mode for files, e.g. "0664".
+file_mode = ""
