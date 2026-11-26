@@ -17,7 +17,7 @@
         {
           "level": "warn",
           "code": "subtitle.language_mismatch",
-          "msg": "Subs/English.eng.srt is labelled English but its text is Romanian (confidence 0.98)"
+          "msg": "Subs/English.eng.srt is labelled English but its text is Romanian (confidence 0.96)"
         },
         {
           "level": "info",

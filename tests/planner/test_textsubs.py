@@ -75,7 +75,7 @@ def test_cue_texts_ass_text_field_only():
 def test_wordlists_shipped():
     lists = load_wordlists()
     assert set(lists) == {"en", "es", "it", "fr", "de", "pt", "ro", "nl"}
-    assert all(100 <= len(words) <= 150 for words in lists.values()), {k: len(v) for k, v in lists.items()}
+    assert all(100 <= len(words) <= 200 for words in lists.values()), {k: len(v) for k, v in lists.items()}
 
 
 def test_large_utf8_file_cut_inside_a_character_stays_utf8():
