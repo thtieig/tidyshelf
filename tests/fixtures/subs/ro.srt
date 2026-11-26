@@ -1,0 +1,55 @@
+1
+00:00:03,000 --> 00:00:05,500
+Unde ai fost asearã? Te-am aºteptat ºi nu ai venit.
+
+2
+00:00:06,000 --> 00:00:08,500
+ªtiu, îmi pare rãu. Trenul a întârziat ºi telefonul meu nu mai avea baterie.
+
+3
+00:00:09,000 --> 00:00:11,500
+Puteai sã suni de la garã, dacã voiai.
+
+4
+00:00:12,000 --> 00:00:14,500
+Nu era nimeni acolo ºi ningea atât de tare cã nu se vedea drumul.
+
+5
+00:00:15,000 --> 00:00:17,500
+Bine, acum eºti aici. Intrã ºi stai lângã foc.
+
+6
+00:00:18,000 --> 00:00:20,500
+Mulþumesc. Mama ta mai este treazã?
+
+7
+00:00:21,000 --> 00:00:23,500
+S-a culcat acum o orã. A spus sã îþi zic cã este fericitã cã ai venit.
+
+8
+00:00:24,000 --> 00:00:26,500
+Am ceva pentru ea. Este în geanta mea, dar poate sã aºtepte pânã dimineaþã.
+
+9
+00:00:27,000 --> 00:00:29,500
+Vrei un ceai? Avem ºi ciorbã, dacã þi-e foame.
+
+10
+00:00:30,000 --> 00:00:32,500
+Doar un ceai, te rog. Am mâncat pe drum, dar nu a fost foarte bun.
+
+11
+00:00:33,000 --> 00:00:35,500
+Trebuie sã vorbim despre ce s-a întâmplat la casã.
+
+12
+00:00:36,000 --> 00:00:38,500
+ªtiu cã trebuie. Dar nu în seara asta. Acum vreau doar sã fiu aici cu tine.
+
+13
+00:00:39,000 --> 00:00:41,500
+Bine. Mâine, atunci. ªi de data asta îmi spui tot.
+
+14
+00:00:42,000 --> 00:00:44,500
+Îþi spun tot, promit. Acum, unde ai pus ceºtile cele bune?

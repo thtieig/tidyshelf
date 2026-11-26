@@ -1,0 +1,55 @@
+1
+00:00:03,000 --> 00:00:05,500
+¿Dónde estabas anoche? Te estuve esperando.
+
+2
+00:00:06,000 --> 00:00:08,500
+Lo sé, lo siento. El tren llegó tarde y mi teléfono no tenía batería.
+
+3
+00:00:09,000 --> 00:00:11,500
+Podías haber llamado desde la estación.
+
+4
+00:00:12,000 --> 00:00:14,500
+No había nadie allí, y nevaba tanto que no se veía el camino.
+
+5
+00:00:15,000 --> 00:00:17,500
+Bueno, ahora estás aquí. Pasa y siéntate junto al fuego.
+
+6
+00:00:18,000 --> 00:00:20,500
+Gracias. ¿Tu madre todavía está despierta?
+
+7
+00:00:21,000 --> 00:00:23,500
+Se fue a la cama hace una hora. Me dijo que te dijera que está contenta de que vinieras.
+
+8
+00:00:24,000 --> 00:00:26,500
+Tengo algo para ella. Está en mi bolsa, pero puede esperar hasta mañana.
+
+9
+00:00:27,000 --> 00:00:29,500
+¿Quieres un té? También hay sopa, si tienes hambre.
+
+10
+00:00:30,000 --> 00:00:32,500
+Solo té, por favor. Comí por el camino, pero no estaba muy bueno.
+
+11
+00:00:33,000 --> 00:00:35,500
+Tenemos que hablar de lo que pasó en la casa.
+
+12
+00:00:36,000 --> 00:00:38,500
+Lo sé. Pero no esta noche. Esta noche solo quiero estar aquí contigo, señor mío.
+
+13
+00:00:39,000 --> 00:00:41,500
+Muy bien. Mañana, entonces. Y esta vez me lo vas a contar todo.
+
+14
+00:00:42,000 --> 00:00:44,500
+Te lo contaré todo, te lo prometo. ¿Dónde pusiste las tazas buenas?

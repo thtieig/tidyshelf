@@ -17,6 +17,7 @@ from dataclasses import dataclass, field
 from importlib import resources
 from pathlib import Path
 
+from tidyshelf import textsubs
 from tidyshelf_apply import check_roots
 
 SYSTEM_CONFIG = Path("/etc/tidyshelf.toml")
@@ -264,4 +265,11 @@ def validate(cfg: dict) -> Report:
         errs, warns = check_roots(roots)
         report.errors.extend(errs)
         report.warnings.extend(warns)
+    languages = cfg.get("subtitles", {}).get("languages") if isinstance(cfg.get("subtitles"), dict) else None
+    if isinstance(languages, list):
+        known = textsubs.load_wordlists()
+        for lang in languages:
+            if isinstance(lang, str) and lang not in known:
+                report.warnings.append(f"subtitles.languages: no word list for {lang!r}; "
+                                       "it is recognised only by file name tags")
     return report

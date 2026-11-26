@@ -146,3 +146,9 @@ def test_all_errors_are_collected():
 ])
 def test_formats_reject_a_trailing_newline(over, needle):
     assert any(needle in e for e in errors(**over)), errors(**over)
+
+
+def test_allowed_language_without_word_list_warns():
+    report = check(subtitles={"languages": ["en", "pl"]})
+    assert report.errors == []
+    assert any("'pl'" in w for w in report.warnings), report.warnings
