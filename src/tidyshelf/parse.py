@@ -92,8 +92,9 @@ def decide_movie(folder: Parsed | None, file: Parsed, override: dict | None, cfg
     year = first.year or second.year
     kind = "series" if "series" in (first.kind, second.kind) else "movie"
     out = MovieName(title=title, year=year, kind=kind)
-    titles_differ = bool(first.title and second.title and first.title.casefold() != second.title.casefold())
-    years_differ = first.year is not None and second.year is not None and first.year != second.year
+    both_full = first.year is not None and second.year is not None  # a bare "film.mkv" is no opinion
+    titles_differ = both_full and bool(first.title and second.title and first.title.casefold() != second.title.casefold())
+    years_differ = both_full and first.year != second.year
     if titles_differ or years_differ:
         which = "folder" if first is folder else "file"
         out.findings.append(("info", "parse.folder_file_disagree",

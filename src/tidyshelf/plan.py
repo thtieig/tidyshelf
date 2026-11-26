@@ -84,6 +84,10 @@ class Plan:
     def dumps(self) -> str:
         return json.dumps(self.to_dict(), indent=2, ensure_ascii=True) + "\n"
 
+    def validate(self) -> None:
+        """The executor's own check; a planner bug shows up here, not on the NAS."""
+        tidyshelf_apply.validate_plan(self.to_dict())
+
     @property
     def plan_id(self) -> str:
         return tidyshelf_apply.plan_id(self.to_dict())

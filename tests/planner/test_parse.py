@@ -118,3 +118,13 @@ def test_series_if_either_name_is_series(cfg):
 def test_title_that_is_a_web_address_is_junk(title, junk):
     from tidyshelf.parse import _is_junk
     assert _is_junk(title, set()) is junk
+
+
+def test_plain_file_name_does_not_count_as_disagreement(cfg):
+    d = decide_movie(P("Winter Lights", 2004), P("Film", None), None, cfg, [])
+    assert (d.title, d.year, d.findings) == ("Winter Lights", 2004, [])
+
+
+def test_title_disagreement_reported_when_both_names_are_full(cfg):
+    d = decide_movie(P("Winter Lights", 2004), P("Winter Light", 2004), None, cfg, [])
+    assert [c for _l, c, _m in d.findings] == ["parse.folder_file_disagree"]
