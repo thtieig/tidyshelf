@@ -45,7 +45,8 @@ tidyshelf-apply plan.json --execute   # does it, after you type the plan id
 ```
 
 Items the tool cannot decide (no year, several videos, a clash with the library) are marked
-*needs review* and left alone; fix them with an `[[override]]` and plan again. Junk is moved to
+*needs review* and left alone. Fix the cause (an `[[override]]` for a missing year or a wrong
+title, or by hand for the rest) and plan again. Junk is moved to
 `.tidyshelf-trash/` in the source folder, never deleted unless you ask for it.
 
 See [docs/ADVANCED.md](docs/ADVANCED.md) to customise, and [docs/NAMING.md](docs/NAMING.md) for

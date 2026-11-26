@@ -45,6 +45,11 @@ def _is_junk(title: str, junk: set[str]) -> bool:
 
 def parse_name(name: str, cfg: dict, trace: list[str]) -> Parsed:
     """Parse one folder or file name. Every step that changes something adds a line to `trace`."""
+    for rule in cfg["parse"]["name_rules"]:
+        new = re.sub(rule["match"], rule["replace"], name)
+        if new != name:
+            trace.append(f"name rule {rule['match']!r}: {name!r} -> {new!r}")
+            name = new
     guess = guessit(name)
     title = guess.get("title")
     title = title if isinstance(title, str) else None
@@ -88,19 +93,25 @@ def decide_movie(folder: Parsed | None, file: Parsed, override: dict | None, cfg
     """Combine the folder's and the file's reading, then apply an override."""
     first, second = (folder, file) if folder is not None and cfg["parse"]["folder_beats_file"] else (file, folder)
     second = second or Parsed(None, None, "movie", None, (), None)
-    title = first.title or second.title
-    year = first.year or second.year
     kind = "series" if "series" in (first.kind, second.kind) else "movie"
-    out = MovieName(title=title, year=year, kind=kind)
-    both_full = first.year is not None and second.year is not None  # a bare "film.mkv" is no opinion
-    titles_differ = both_full and bool(first.title and second.title and first.title.casefold() != second.title.casefold())
-    years_differ = both_full and first.year != second.year
-    if titles_differ or years_differ:
-        which = "folder" if first is folder else "file"
-        out.findings.append(("info", "parse.folder_file_disagree",
-                             f"folder and file names disagree ({first.title!r} {first.year} vs "
-                             f"{second.title!r} {second.year}); using the {which}"))
-        trace.append(f"folder and file disagree; {which} wins")
+    full = [p for p in (first, second) if p.title and p.year is not None]
+    if full:  # title and year always come together from one name: the first that has both
+        title, year = full[0].title, full[0].year
+        if len(full) == 2 and (first.title.casefold(), first.year) != (second.title.casefold(), second.year):
+            which = "folder" if full[0] is folder else "file"
+            msg = (f"folder and file names disagree ({first.title!r} {first.year} vs "
+                   f"{second.title!r} {second.year}); using the {which}")
+            findings = [("info", "parse.folder_file_disagree", msg)]
+            trace.append(f"folder and file disagree; {which} wins")
+        else:
+            findings = []
+    else:
+        title, year = first.title or second.title, first.year if first.year is not None else second.year
+        findings = []
+        if title and year is not None:
+            findings = [("warn", "parse.mixed_names", f"title {title!r} and year {year} come from different "
+                                                     "names; check them")]
+    out = MovieName(title=title, year=year, kind=kind, findings=findings)
     if override is not None:
         if override.get("ignore"):
             trace.append(f"override {override['match']!r}: ignore")

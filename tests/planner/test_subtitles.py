@@ -215,3 +215,16 @@ def test_dropped_idx_takes_its_sub_along(cfg, put):
     idx = put("movie.DISABLE.idx", b"id: en, index: 0\n")
     sub = put("movie.DISABLE.sub", b"\x00" * 50)
     assert dropped(choose([idx, sub], cfg, rel)) == {"movie.DISABLE.idx": "orphan", "movie.DISABLE.sub": "orphan"}
+
+
+def test_tag_of_a_language_without_word_list_is_a_claim(cfg, put):
+    c = choose([put("Croatian.hrv.srt", "hr.srt"), put("Italian.ita.srt", "it.srt")], cfg, rel)
+    assert kept(c) == [("Italian.ita.srt", "it", None)]
+    assert dropped(c) == {"Croatian.hrv.srt": "language"}
+
+
+def test_one_unknown_among_known_gets_default_language(cfg, put):
+    c = choose([put("English.srt", "en_plain.srt"),
+                put("forced.srt", b"1\n00:00:01,000 --> 00:00:02,000\nHalt!\n")], cfg, rel)
+    assert c.review is None
+    assert sorted(kept(c)) == [("English.srt", "en", None), ("forced.srt", "en", "forced")]

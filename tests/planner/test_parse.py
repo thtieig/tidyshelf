@@ -98,7 +98,8 @@ def test_file_beats_folder_when_configured(cfg):
 
 def test_missing_field_taken_from_the_other_name(cfg):
     d = decide_movie(P("Winter Lights", None), P(None, 2004), None, cfg, [])
-    assert (d.title, d.year, d.findings) == ("Winter Lights", 2004, [])
+    assert (d.title, d.year) == ("Winter Lights", 2004)
+    assert [c for _l, c, _m in d.findings] == ["parse.mixed_names"]  # reported: the pair is not from one name
 
 
 def test_missing_year_needs_review(cfg):
@@ -128,3 +129,15 @@ def test_plain_file_name_does_not_count_as_disagreement(cfg):
 def test_title_disagreement_reported_when_both_names_are_full(cfg):
     d = decide_movie(P("Winter Lights", 2004), P("Winter Light", 2004), None, cfg, [])
     assert [c for _l, c, _m in d.findings] == ["parse.folder_file_disagree"]
+
+
+def test_title_and_year_come_from_the_same_name(cfg):
+    d = decide_movie(P("New Folder", None), P("Cold River", 2010), None, cfg, [])
+    assert (d.title, d.year) == ("Cold River", 2010)
+
+
+def test_name_rules_apply_before_guessit(cfg):
+    cfg["parse"]["name_rules"] = [{"match": r"^Example\.Site - ", "replace": ""}]
+    p = parse_name("Example.Site - Winter Lights (2004) 1080p BluRay-GRP", cfg, trace := [])
+    assert (p.title, p.year) == ("Winter Lights", 2004)
+    assert any("name rule" in line for line in trace)

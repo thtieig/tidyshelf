@@ -227,3 +227,83 @@ def test_traces_per_item(lib):
     assert any("guessit" in line for line in lines)
     assert any("English.eng.srt" in line and "ro" in line and "cp1250" in line for line in lines)
     assert any("Winter Lights (2004)" in line for line in lines)
+
+
+def test_loose_video_target_name(lib):
+    lib.tree("source", "Bright.Harbour.2011.mp4")
+    assert ops(only(lib), "move")[0]["to"] == "movies:Bright Harbour (2011)/Bright Harbour (2011).mp4"
+
+
+@pytest.mark.parametrize("folder, video, target", [
+    ("New Folder", "Cold.River.2010.720p.mkv", "movies:Cold River (2010)"),
+    ("A", "Mission: Possible (1999).mkv", "movies:Mission - Possible (1999)"),
+])
+def test_title_and_year_from_one_name(lib, folder, video, target):
+    lib.tree("source", f"{folder}/{video}")
+    assert ops(only(lib), "mkdir")[0]["path"] == target
+
+
+@pytest.mark.parametrize("folder", ["Bright Harbour (2011) - 720p BluRay x264-GRP", "Bright Harbour (2011) [1080p]"])
+def test_good_looking_folder_with_release_words_is_renamed(lib, folder):
+    lib.tree("source", f"{folder}/x.mkv")
+    assert ops(only(lib), "mkdir")[0]["path"] == "movies:Bright Harbour (2011)"
+
+
+def test_titles_that_clean_to_the_same_folder_do_not_crash(lib):
+    lib.tree("source", "Who.Knows.2001/a.mkv\nWho.Knows?.2001/b.mkv")
+    first, second = items(lib)
+    assert first["status"] == "ready" and "conflict.in_plan" in codes(second)
+
+
+def test_library_clash_uses_the_cleaned_name(lib):
+    lib.tree("movies", "who knows (2001)/x.mkv")
+    lib.tree("source", "Who.Knows?.2001/b.mkv")
+    assert "conflict.exists" in codes(only(lib))
+
+
+def test_dangling_symlink_in_library_is_a_conflict_not_a_crash(lib, tmp_path):
+    lib.tree("movies", f"Winter Lights (2004) -> {tmp_path}/gone")
+    lib.tree("source", f"{FOLDER}/w.mkv")
+    assert "conflict.exists" in codes(only(lib))
+
+
+def test_title_with_sample_in_it_is_the_movie(lib):
+    lib.tree("source", "The.Sample.2010/The.Sample.2010.mkv [1000]")
+    assert ops(only(lib), "mkdir")[0]["path"] == "movies:The Sample (2010)"
+
+
+def test_small_sample_next_to_the_movie_is_junk(lib):
+    lib.tree("source", f"{FOLDER}/w.mkv [1000]\n{FOLDER}/sample.mkv [10]")
+    item = only(lib)
+    assert item["status"] == "ready"
+    assert any(op["to"].endswith("/sample.mkv") and "trash" in op["to"] for op in ops(item, "move"))
+
+
+def _unreadable(path):
+    os.chmod(path, 0)
+    return not os.access(path, os.R_OK)
+
+
+def test_unreadable_subtitle_needs_review_not_crash(lib):
+    lib.tree("source", f"{FOLDER}/w.mkv")
+    sub = lib.write("source", f"{FOLDER}/w.en.srt", (SUBS / "en_plain.srt").read_bytes())
+    try:
+        if not _unreadable(sub):
+            pytest.skip("running as root")
+        item = only(lib)
+    finally:
+        os.chmod(sub, 0o644)
+    assert item["status"] == "needs_review" and "scan.unreadable" in codes(item)
+
+
+def test_unreadable_folder_needs_review_not_crash(lib):
+    lib.tree("source", f"{FOLDER}/Subs/a.srt\n{FOLDER}/w.mkv\nOther.Film.1999/o.mkv")
+    sub_dir = lib.roots["source"] / FOLDER / "Subs"
+    try:
+        if not _unreadable(sub_dir):
+            pytest.skip("running as root")
+        first, second = items(lib)
+    finally:
+        os.chmod(sub_dir, 0o755)
+    assert "scan.unreadable" in codes(second) and second["status"] == "needs_review"
+    assert first["status"] == "ready"

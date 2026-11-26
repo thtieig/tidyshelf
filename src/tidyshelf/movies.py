@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import os
+import re
+import stat
 from dataclasses import dataclass, field
 
 from tidyshelf import parse, subtitles
@@ -40,6 +42,8 @@ def _real(cfg: dict, ref: str) -> str:
 
 def _video_bytes(cfg: dict, lib_ref: str) -> int:
     folder, total = _real(cfg, lib_ref), 0
+    if not stat.S_ISDIR(os.lstat(folder).st_mode):
+        return 0
     videos = {e.lower() for e in cfg["video"]["extensions"]}
     for name in sorted(os.listdir(folder)):
         st = os.lstat(os.path.join(folder, name))
@@ -77,11 +81,13 @@ def plan_candidate(cand: Candidate, cfg: dict, state: PlanState) -> Planned:
     rel = cand.ref.split(":", 1)[1]
     item = Item("", "movie", "ready", cand.ref)
     left = [("info", "scan.left", f"{r.split(':', 1)[1]} left untouched ({why})") for r, why in cand.left]
+    if cand.error:
+        return Planned(_finish(item, left, review=f"{rel}: {cand.error}", code="scan.unreadable"), trace)
     if not cand.videos:
         return Planned(_finish(item, [("info", "movie.no_video", f"{rel}: no video file; left as it is")] + left,
                                "skipped"), trace)
     folder_p = parse.parse_name(os.path.basename(cand.path), cfg, trace) if cand.is_dir else None
-    video_ps = [parse.parse_name(os.path.basename(v), cfg, trace) for v in cand.videos]
+    video_ps = [parse.parse_name(os.path.basename(v.split(":", 1)[1]), cfg, trace) for v in cand.videos]
     override = parse.find_override(rel, cfg)
     name = parse.decide_movie(folder_p, video_ps[0], override, cfg, trace)
     if name.ignore:
@@ -101,8 +107,10 @@ def plan_candidate(cand: Candidate, cfg: dict, state: PlanState) -> Planned:
     # Names: keep a folder that already follows the standard (tags included), else build one.
     base = os.path.basename(cand.path)
     m = MOVIE_FOLDER_RE.fullmatch(base) if cand.is_dir else None
+    junk = {t.casefold() for t in cfg["parse"]["junk_tokens"] + cfg["parse"]["extra_tokens"]}
+    tag_words = [w for w in re.split(r"[\s\[\]()._-]+", m["suffix"].casefold()) if w] if m else []
     if (m and m["title"].casefold() == name.title.casefold() and int(m["year"]) == name.year
-            and safe_name(base) == base):
+            and safe_name(base) == base and not any(w in junk for w in tag_words)):
         folder = stem = base
         trace.append(f"folder {base!r} already follows the standard: kept")
     else:
@@ -113,7 +121,8 @@ def plan_candidate(cand: Candidate, cfg: dict, state: PlanState) -> Planned:
     trace.append(f"target {lib}")
 
     # Conflicts: the library, then earlier items of this plan.
-    key = f"{name.title} ({name.year})".casefold()
+    fm = MOVIE_FOLDER_RE.fullmatch(folder)
+    key = (f"{fm['title']} ({fm['year']})" if fm else folder).casefold()  # the name as it will be on disk
     existing = state.library.get(key) or (lib if os.path.lexists(_real(cfg, lib)) else None)
     if existing is not None:
         size = file_stat(_real(cfg, cand.videos[0]))[0]
@@ -191,7 +200,13 @@ def build_plan(cfg: dict, paths: list[str] | None = None, created: str | None = 
     plan, traces, counters = Plan(created), {}, {}
     state = PlanState(library=library_index(cfg))
     for cand in scan_source(cfg, paths):
-        planned = plan_candidate(cand, cfg, state)
+        try:
+            planned = plan_candidate(cand, cfg, state)
+        except OSError as exc:  # e.g. a subtitle that cannot be read: report, keep planning the rest
+            what = os.path.basename(exc.filename) if isinstance(exc.filename, str) else "a file"
+            item = Item("", "movie", "ready", cand.ref)
+            planned = Planned(_finish(item, [], review=f"cannot read {what}: {exc.strerror or exc}",
+                                      code="scan.unreadable"), [])
         item = planned.item
         counters[item.kind] = counters.get(item.kind, 0) + 1
         item.id = f"{item.kind}-{counters[item.kind]:04}"

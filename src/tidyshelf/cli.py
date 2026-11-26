@@ -204,7 +204,7 @@ def cmd_plan(args, out: _Out) -> int:
         summary = {"plan_id": pid, "exit": code, "items": [
             {"id": it["id"], "status": it["status"], "kind": it["kind"], "source": it["source"],
              "target": _target(it), "findings": it["findings"]} for it in doc["items"]]}
-        print(json.dumps(summary, indent=2, ensure_ascii=False), file=sys.stderr if args.out == "-" else sys.stdout)
+        print(json.dumps(summary, indent=2, ensure_ascii=True), file=sys.stderr if args.out == "-" else sys.stdout)
     elif not args.quiet:
         stream = sys.stderr if args.out == "-" else sys.stdout
         for line in _summary_lines(doc["items"], pid, args.out):
@@ -224,7 +224,7 @@ def cmd_explain(args, out: _Out) -> int:
     (item,) = plan.to_dict()["items"]
     trace = traces[item["id"]]
     if args.json:
-        print(json.dumps({"source": item["source"], "trace": trace, "item": item}, indent=2, ensure_ascii=False))
+        print(json.dumps({"source": item["source"], "trace": trace, "item": item}, indent=2, ensure_ascii=True))
         return 0
     out.info(f"{item['source']}")
     for line in trace:
@@ -239,6 +239,9 @@ def cmd_explain(args, out: _Out) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    for stream in (sys.stdout, sys.stderr):  # names that are not valid UTF-8 print as \udcxx, never crash
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(errors="backslashreplace")
     parser = build_parser()
     try:
         args = parser.parse_args(argv)

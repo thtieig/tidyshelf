@@ -9,6 +9,9 @@ from importlib import resources
 
 READ_LIMIT = 2 * 1024 * 1024  # bytes read for detection; plenty for any subtitle
 MIN_WORDS = 30  # fewer matched words than this and the language is "unknown"
+# Share of all words that some list knows. Text in a language without a list (Croatian, Catalan)
+# matches only a few look-alike words and must stay "unknown", not become the nearest language.
+MIN_COVERAGE = 0.3
 
 _TAG = re.compile(r"\{[^}]*\}|<[^>]*>")
 _WORD = re.compile(r"[^\W\d_]+")
@@ -63,8 +66,8 @@ def cue_texts(text: str, ext: str) -> list[str]:
     return out
 
 
-def _score(text: str, ext: str, wordlists: dict) -> tuple[str | None, int, int]:
-    """(best language, its matched words, matched words of any language)."""
+def _score(text: str, ext: str, wordlists: dict) -> tuple[str | None, int, int, int]:
+    """(best language, its matched words, matched words of any language, all words)."""
     tokens = _WORD.findall(" ".join(cue_texts(text, ext)).lower().translate(_CEDILLA))
     hits = {lang: 0 for lang in wordlists}
     any_hits = 0
@@ -74,9 +77,9 @@ def _score(text: str, ext: str, wordlists: dict) -> tuple[str | None, int, int]:
         for lang in matched:
             hits[lang] += 1
     if not hits:
-        return None, 0, 0
+        return None, 0, 0, len(tokens)
     best = min(hits, key=lambda lang: (-hits[lang], lang))
-    return best, hits[best], any_hits
+    return best, hits[best], any_hits, len(tokens)
 
 
 def detect(data: bytes, ext: str, wordlists: dict) -> Detection:
@@ -85,11 +88,11 @@ def detect(data: bytes, ext: str, wordlists: dict) -> Detection:
         chunk = chunk[:chunk.rfind(b"\n") + 1]
     best = None
     for text, enc in decode_candidates(chunk):
-        lang, hits, any_hits = _score(text, ext, wordlists)
+        lang, hits, any_hits, tokens = _score(text, ext, wordlists)
         if best is None or hits > best[1]:
-            best = (lang, hits, any_hits, enc)
-    lang, hits, any_hits, enc = best
-    if any_hits < MIN_WORDS:
+            best = (lang, hits, any_hits, tokens, enc)
+    lang, hits, any_hits, tokens, enc = best
+    if any_hits < MIN_WORDS or any_hits < MIN_COVERAGE * tokens:
         return Detection(None, 0.0, any_hits, enc)
     return Detection(lang, round(hits / any_hits, 2), any_hits, enc)
 

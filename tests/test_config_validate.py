@@ -152,3 +152,13 @@ def test_allowed_language_without_word_list_warns():
     report = check(subtitles={"languages": ["en", "pl"]})
     assert report.errors == []
     assert any("'pl'" in w for w in report.warnings), report.warnings
+
+
+def test_name_rules_are_checked():
+    assert check(parse={"name_rules": [{"match": "(", "replace": ""}]}).errors
+    assert check(parse={"name_rules": [{"match": "^x", "replace": ""}]}).errors == []
+
+
+@pytest.mark.parametrize("value", ["", "../x", "Sub:s", "a/b"])
+def test_movie_subs_folder_must_be_a_plain_name(value):
+    assert any("movie_subs_folder" in e for e in check(naming={"movie_subs_folder": value}).errors)

@@ -83,6 +83,23 @@ IT = [
     "Ti dirò tutto, te lo prometto. Dove hai messo le tazze più belle?",
 ]
 
+HR = [  # a language without a shipped word list (Croatian), to test that it is not taken for another
+    "Gdje si bio sinoć? Čekala sam te cijelu večer.",
+    "Znam, žao mi je. Vlak je kasnio, a mobitel mi se ispraznio.",
+    "Mogao si nazvati s kolodvora.",
+    "Tamo nije bilo nikoga, a snijeg je padao tako jako da nisam vidio cestu.",
+    "Dobro, sada si ovdje. Uđi i sjedni kraj vatre.",
+    "Hvala. Je li tvoja majka još budna?",
+    "Otišla je spavati prije sat vremena. Rekla je da ti kažem da je sretna što si došao.",
+    "Imam nešto za nju. U torbi je, ali može pričekati do jutra.",
+    "Želiš li čaj? Ima i juhe, ako si gladan.",
+    "Samo čaj, molim te. Jeo sam usput, ali nije bilo baš dobro.",
+    "Trebali bismo razgovarati o onome što se dogodilo u kući.",
+    "Znam da bismo trebali. Ali ne večeras. Večeras samo želim biti ovdje s tobom.",
+    "U redu. Sutra, onda. I ovaj put ćeš mi sve ispričati.",
+    "Hoću. Obećavam. Gdje si stavila dobre šalice?",
+]
+
 
 def main():
     en_sdh = []
@@ -95,6 +112,7 @@ def main():
     (OUT / "en_sdh.srt").write_text(srt(en_sdh), encoding="utf-8")
     (OUT / "ro.srt").write_bytes(srt(RO * 2).encode("cp1250"))
     (OUT / "es.srt").write_bytes(srt(ES * 2).encode("cp1252"))
+    (OUT / "hr.srt").write_text(srt(HR * 2), encoding="utf-8")
     (OUT / "it.srt").write_bytes(b"\xef\xbb\xbf" + srt(IT * 2).encode("utf-8"))
     ass = ["[Script Info]", "Title: test", "ScriptType: v4.00+", "", "[Events]",
            "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text"]

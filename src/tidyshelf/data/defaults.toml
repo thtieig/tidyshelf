@@ -71,6 +71,10 @@ junk_tokens = [
 ]
 # Your own extra junk tokens, added to junk_tokens.
 extra_tokens = []
+# Name clean-up rules, applied in order to each folder and file name BEFORE it is parsed, as
+# [[parse.name_rules]] blocks: match = regex, replace = replacement text. Use them for prefixes or
+# suffixes the parser would take as the title, e.g. match = '^Some\.Site - ', replace = ''.
+name_rules = []
 # Title clean-up rules, applied in order after parsing, as [[parse.title_rules]] blocks:
 #   match = regex, replace = replacement text (\1 for groups). None by default.
 title_rules = []

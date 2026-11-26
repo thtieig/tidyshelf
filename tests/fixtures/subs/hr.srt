@@ -1,0 +1,111 @@
+1
+00:00:03,000 --> 00:00:05,500
+Gdje si bio sinoć? Čekala sam te cijelu večer.
+
+2
+00:00:06,000 --> 00:00:08,500
+Znam, žao mi je. Vlak je kasnio, a mobitel mi se ispraznio.
+
+3
+00:00:09,000 --> 00:00:11,500
+Mogao si nazvati s kolodvora.
+
+4
+00:00:12,000 --> 00:00:14,500
+Tamo nije bilo nikoga, a snijeg je padao tako jako da nisam vidio cestu.
+
+5
+00:00:15,000 --> 00:00:17,500
+Dobro, sada si ovdje. Uđi i sjedni kraj vatre.
+
+6
+00:00:18,000 --> 00:00:20,500
+Hvala. Je li tvoja majka još budna?
+
+7
+00:00:21,000 --> 00:00:23,500
+Otišla je spavati prije sat vremena. Rekla je da ti kažem da je sretna što si došao.
+
+8
+00:00:24,000 --> 00:00:26,500
+Imam nešto za nju. U torbi je, ali može pričekati do jutra.
+
+9
+00:00:27,000 --> 00:00:29,500
+Želiš li čaj? Ima i juhe, ako si gladan.
+
+10
+00:00:30,000 --> 00:00:32,500
+Samo čaj, molim te. Jeo sam usput, ali nije bilo baš dobro.
+
+11
+00:00:33,000 --> 00:00:35,500
+Trebali bismo razgovarati o onome što se dogodilo u kući.
+
+12
+00:00:36,000 --> 00:00:38,500
+Znam da bismo trebali. Ali ne večeras. Večeras samo želim biti ovdje s tobom.
+
+13
+00:00:39,000 --> 00:00:41,500
+U redu. Sutra, onda. I ovaj put ćeš mi sve ispričati.
+
+14
+00:00:42,000 --> 00:00:44,500
+Hoću. Obećavam. Gdje si stavila dobre šalice?
+
+15
+00:00:45,000 --> 00:00:47,500
+Gdje si bio sinoć? Čekala sam te cijelu večer.
+
+16
+00:00:48,000 --> 00:00:50,500
+Znam, žao mi je. Vlak je kasnio, a mobitel mi se ispraznio.
+
+17
+00:00:51,000 --> 00:00:53,500
+Mogao si nazvati s kolodvora.
+
+18
+00:00:54,000 --> 00:00:56,500
+Tamo nije bilo nikoga, a snijeg je padao tako jako da nisam vidio cestu.
+
+19
+00:00:57,000 --> 00:00:59,500
+Dobro, sada si ovdje. Uđi i sjedni kraj vatre.
+
+20
+00:01:00,000 --> 00:01:02,500
+Hvala. Je li tvoja majka još budna?
+
+21
+00:01:03,000 --> 00:01:05,500
+Otišla je spavati prije sat vremena. Rekla je da ti kažem da je sretna što si došao.
+
+22
+00:01:06,000 --> 00:01:08,500
+Imam nešto za nju. U torbi je, ali može pričekati do jutra.
+
+23
+00:01:09,000 --> 00:01:11,500
+Želiš li čaj? Ima i juhe, ako si gladan.
+
+24
+00:01:12,000 --> 00:01:14,500
+Samo čaj, molim te. Jeo sam usput, ali nije bilo baš dobro.
+
+25
+00:01:15,000 --> 00:01:17,500
+Trebali bismo razgovarati o onome što se dogodilo u kući.
+
+26
+00:01:18,000 --> 00:01:20,500
+Znam da bismo trebali. Ali ne večeras. Večeras samo želim biti ovdje s tobom.
+
+27
+00:01:21,000 --> 00:01:23,500
+U redu. Sutra, onda. I ovaj put ćeš mi sve ispričati.
+
+28
+00:01:24,000 --> 00:01:26,500
+Hoću. Obećavam. Gdje si stavila dobre šalice?

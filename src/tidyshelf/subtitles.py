@@ -8,6 +8,8 @@ import re
 from dataclasses import dataclass, field
 from typing import Callable
 
+import babelfish
+
 from tidyshelf import textsubs
 from tidyshelf.textsubs import READ_LIMIT, Detection
 
@@ -60,6 +62,18 @@ class Choice:
     review: str | None = None
 
 
+def _other_language(token: str) -> str | None:
+    """An ISO 639-2 code or English language name for a language without a word list."""
+    try:
+        lang = babelfish.Language.fromalpha3b(token) if len(token) == 3 else babelfish.Language.fromname(
+            token.capitalize()) if len(token) >= 5 else None
+    except (ValueError, KeyError, babelfish.Error):
+        return None
+    if lang is None:
+        return None
+    return getattr(lang, "alpha2", None) or lang.alpha3
+
+
 def _name_tokens(name: str) -> list[str]:
     stem = name.rsplit(".", 1)[0] if "." in name else name
     return [t for t in _TOKENS.split(stem.casefold()) if t]
@@ -86,7 +100,7 @@ def analyse(path: str, ref: str, cfg: dict) -> SubInfo:
     ext = os.path.splitext(name)[1].lower()
     tokens = _name_tokens(name)
     claims = [LANG_TAGS[t] for t in tokens if t in LANG_TAGS]
-    claimed = claims[-1] if claims else None
+    claimed = claims[-1] if claims else (_other_language(tokens[-1]) if tokens else None)
     detection, cues = None, []
     if ext in TEXT_EXTS:
         data = _head(path, READ_LIMIT + 1)
@@ -162,9 +176,12 @@ def choose(subs: list[SubInfo], cfg: dict, rel_of: Callable[[str], str]) -> Choi
                 out.findings.append(("info", "subtitle.unverified",
                                      f"{rel_of(s.ref)}: language taken from its name ({s.claimed})"))
     unknown = [s for s in unique if langs[s.ref] is None]
-    if unknown:  # 4. no language at all
-        if len(unique) == 1:
+    if unknown:  # 4. no language at all: one such file gets the default language
+        if len(unknown) == 1:
             langs[unknown[0].ref] = conf["default_language"]
+            out.findings.append(("info", "subtitle.default_language",
+                                 f"{rel_of(unknown[0].ref)}: no recognisable language; "
+                                 f"assumed {conf['default_language']}"))
         else:
             out.review = "several subtitles with no recognisable language"
             return out

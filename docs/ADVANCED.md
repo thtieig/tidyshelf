@@ -40,23 +40,28 @@ Templates must not contain `/` or `\`; folders come from the separate folder tem
 
 Each entry directly inside the source folder is one item: a folder, or a loose video together
 with the subtitles named after it (`Film.mkv` + `Film.en.srt`). guessit reads title and year from
-the folder name and from the video's name; when both carry a year and disagree, the folder wins
-(`[parse] folder_beats_file`). A "title" made only of release words (`1080p`, `x264`, ... from
-`junk_tokens` and your `extra_tokens`) counts as no title. A folder already named
-`Title (Year)` keeps its name, including tags like `[ES]`.
+the folder name and from the video's name. Title and year are always taken together from one
+name: the folder's if it has both (`[parse] folder_beats_file = false` prefers the file), else the
+one that has both; a disagreement is reported. A "title" made only of release words (`1080p`,
+`x264`, ... from `junk_tokens` and your `extra_tokens`) counts as no title. A folder already named
+`Title (Year)` keeps its name, including tags like `[ES]`, unless a tag holds release words
+(`[1080p]`), in which case the name is built fresh.
 
 `tidyshelf explain PATH` prints every step: what guessit read, which rules hit, what each
 subtitle turned out to be, and the resulting operations.
 
 ### Fixing names with rules and overrides
 
-Title rules apply to every title, in order (Python regex, `\1` for groups):
+Name rules change each folder and file name *before* it is read, in order (Python regex, `\1`
+for groups). Use them for a prefix the parser would otherwise take as the title:
 
 ```toml
-[[parse.title_rules]]
-match = '^Example Site - '
+[[parse.name_rules]]
+match = '^Example\.Site - '
 replace = ''
 ```
+
+Title rules change the title *after* it is read, the same way (`[[parse.title_rules]]`).
 
 An override decides one item. `match` is a glob on the item's path inside the source folder, or a
 regex after `re:`. The first matching block wins.
@@ -68,9 +73,11 @@ title = "Winter Lights"
 year = 2004
 
 [[override]]
-match = "re:^Old Rips/"
+match = "re:^Old Rips"
 ignore = true
 ```
+
+To keep a whole folder out of every plan, `[exclude] patterns` is the better tool.
 
 ## Subtitles
 
@@ -81,8 +88,11 @@ Subtitles are judged by what is inside them, not by their names:
    Italian, French, German, Portuguese, Romanian and Dutch. A confident result (`min_confidence`,
    default 0.6) wins over the file name; a disagreement is reported. Old 8-bit encodings
    (Windows-1252, Windows-1250) are recognised.
-3. Languages not in `[subtitles] languages` go to the trash. A language without a word list can
-   still be kept, recognised by its name tag only (`config check` warns).
+3. Languages not in `[subtitles] languages` go to the trash. Text in a language without a word
+   list is "unknown" rather than mistaken for a similar one; its name tag (`hrv`, `Croatian`)
+   still counts. Such a language can be kept, recognised by the tag only (`config check` warns).
+   One subtitle with no recognisable language at all is taken as `default_language`; several
+   make the item *needs review*.
 4. SDH is recognised by name markers (`sdh_markers`) or by many `[MUSIC]`-style cues; forced by
    `forced_markers`.
 5. Per language one subtitle is kept: plain over SDH (`prefer = "sdh"` reverses it), then the one

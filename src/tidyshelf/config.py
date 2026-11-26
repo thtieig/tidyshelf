@@ -18,6 +18,7 @@ from importlib import resources
 from pathlib import Path
 
 from tidyshelf import textsubs
+from tidyshelf.naming import safe_name
 from tidyshelf_apply import check_roots
 
 SYSTEM_CONFIG = Path("/etc/tidyshelf.toml")
@@ -36,6 +37,7 @@ ENUMS: dict[tuple, tuple] = {
 
 REGEX_KEYS: set[tuple] = {
     ("parse", "title_rules", "match"),
+    ("parse", "name_rules", "match"),
     ("subtitles", "ad_patterns"),
     ("subtitles", "ad_patterns_extra"),
     ("junk", "patterns"),
@@ -58,6 +60,7 @@ ARRAY_TABLES: dict[tuple, dict] = {
         "kind": (str, False), "season": (int, False), "ignore": (bool, False),
     },
     ("parse", "title_rules"): {"match": (str, True), "replace": (str, True)},
+    ("parse", "name_rules"): {"match": (str, True), "replace": (str, True)},
 }
 
 _LANG = re.compile(r"[a-z]{2}")
@@ -265,6 +268,12 @@ def validate(cfg: dict) -> Report:
         errs, warns = check_roots(roots)
         report.errors.extend(errs)
         report.warnings.extend(warns)
+    naming = cfg.get("naming") if isinstance(cfg.get("naming"), dict) else {}
+    for key in ("movie_subs_folder", "specials_folder"):
+        value = naming.get(key)
+        if isinstance(value, str) and (not value or safe_name(value) != value):
+            report.errors.append(f"naming.{key}: must be a plain folder name (no / \\ : * ? \" < > |, "
+                                 "not empty, not . or ..)")
     languages = cfg.get("subtitles", {}).get("languages") if isinstance(cfg.get("subtitles"), dict) else None
     if isinstance(languages, list):
         known = textsubs.load_wordlists()

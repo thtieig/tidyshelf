@@ -26,6 +26,8 @@ class Candidate:
     junk: list[str] = field(default_factory=list)
     left: list[tuple[str, str]] = field(default_factory=list)  # (ref, reason): never touched
     dirs: list[str] = field(default_factory=list)  # sub-folders, deepest first
+    error: str | None = None  # set when part of it could not be read
+    samples: list = field(default_factory=list, repr=False)  # (ref, size) of sample-named videos, during the scan
 
 
 class _Rules:
@@ -42,7 +44,7 @@ class _Rules:
     def kind(self, name: str) -> str:
         ext = os.path.splitext(name)[1].lower()
         if ext in self.videos:
-            return "junk" if any(p.search(name) for p in self.junk) else "video"
+            return "sample" if any(p.search(name) for p in self.junk) else "video"
         return "sub" if ext in self.subs else "junk"
 
 
@@ -67,20 +69,46 @@ def _walk(cand: Candidate, path: str, ref: str, rules: _Rules) -> None:
         elif not stat.S_ISREG(mode):
             cand.left.append((child, "special file"))
         else:
-            {"video": cand.videos, "sub": cand.subs, "junk": cand.junk}[rules.kind(name)].append(child)
+            _add(cand, rules.kind(name), child, full)
+
+
+def _add(cand: Candidate, kind: str, ref: str, path: str) -> None:
+    if kind == "sample":
+        cand.samples.append((ref, os.lstat(path).st_size))
+    else:
+        {"video": cand.videos, "sub": cand.subs, "junk": cand.junk}[kind].append(ref)
+
+
+def _settle_samples(cand: Candidate, root: str) -> None:
+    """A video matching a junk pattern ("sample") is junk only next to a video at least as large;
+    otherwise it is the movie (a title can contain the word)."""
+    sizes = [os.lstat(os.path.join(root, v.split(":", 1)[1])).st_size for v in cand.videos]
+    for ref, size in cand.samples:
+        (cand.junk if any(s >= size for s in sizes) else cand.videos).append(ref)
 
 
 def _candidate(root: str, rel: str, rules: _Rules) -> Candidate:
+    try:
+        return _candidate_unchecked(root, rel, rules)
+    except OSError as exc:
+        name = os.path.relpath(exc.filename, root) if isinstance(exc.filename, str) else rel
+        return Candidate(f"source:{rel}", os.path.join(root, rel), True,
+                         error=f"cannot read {name}: {exc.strerror or exc}")
+
+
+def _candidate_unchecked(root: str, rel: str, rules: _Rules) -> Candidate:
     ref, path = f"source:{rel}", os.path.join(root, rel)
     mode = os.lstat(path).st_mode
     if stat.S_ISLNK(mode) or not (stat.S_ISDIR(mode) or stat.S_ISREG(mode)):
         return Candidate(ref, path, False, left=[(ref, "symlink" if stat.S_ISLNK(mode) else "special file")])
     if stat.S_ISREG(mode):
         cand = Candidate(ref, path, False)
-        {"video": cand.videos, "sub": cand.subs, "junk": cand.junk}[rules.kind(os.path.basename(rel))].append(ref)
+        _add(cand, rules.kind(os.path.basename(rel)), ref, path)
+        _settle_samples(cand, root)
         return cand
     cand = Candidate(ref, path, True)
     _walk(cand, path, ref, rules)
+    _settle_samples(cand, root)
     for bucket in (cand.videos, cand.subs, cand.junk, cand.left):
         bucket.sort()
     cand.dirs.sort(key=lambda d: (-d.count("/"), d))

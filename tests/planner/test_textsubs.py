@@ -87,3 +87,8 @@ def test_large_utf8_file_cut_inside_a_character_stays_utf8():
         data = b" " + data
     d = detect(data, ".srt", load_wordlists())
     assert d.encoding == "utf-8", d
+
+
+def test_language_without_a_word_list_is_unknown_not_a_lookalike():
+    d = detect(read_fixture("hr.srt"), ".srt", load_wordlists())
+    assert d.lang is None, d  # Croatian must not come out as Italian

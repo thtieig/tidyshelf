@@ -133,3 +133,14 @@ def test_plan_then_apply_end_to_end(lib, capsys, tmp_path):
     assert not (lib.roots["source"] / FOLDER).exists()
     code, out, _err = run(lib, capsys, "plan")
     assert code == 0 and "0 items" in out  # idempotent: nothing left to do
+
+
+def test_undecodable_names_print_without_crashing(lib, capsys):
+    import os
+    src = os.fsencode(lib.roots["source"])
+    os.makedirs(os.path.join(src, b"Caf\xe9.Noir.2003"))
+    open(os.path.join(src, b"Caf\xe9.Noir.2003", b"f.mkv"), "wb").close()
+    for argv in (["plan"], ["plan", "--json"], ["explain", "source:Caf\udce9.Noir.2003"]):
+        code, out, err = run(lib, capsys, *argv)
+        assert code in (0, 2), (argv, err)
+        assert "Traceback" not in err
