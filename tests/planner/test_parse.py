@@ -141,3 +141,18 @@ def test_name_rules_apply_before_guessit(cfg):
     p = parse_name("Example.Site - Winter Lights (2004) 1080p BluRay-GRP", cfg, trace := [])
     assert (p.title, p.year) == ("Winter Lights", 2004)
     assert any("name rule" in line for line in trace)
+
+
+@pytest.mark.parametrize("name, title", [
+    ("W.L. (2004)", "W.L."),
+    ("S.W.A.T. (2003)", "S.W.A.T."),
+])
+def test_dotted_acronyms_keep_their_capitals(cfg, name, title):
+    assert parse_name(name, cfg, []).title == title
+
+
+@pytest.mark.parametrize("word, expected", [("w.l.", "W.L."), ("s.w.a.t", "S.W.A.T"), ("river", "River"),
+                                            ("mcqueen", "Mcqueen"), ("2004", "2004")])
+def test_title_word(word, expected):
+    from tidyshelf.parse import _title_word
+    assert _title_word(word) == expected

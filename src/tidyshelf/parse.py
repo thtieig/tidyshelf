@@ -38,6 +38,14 @@ def _ints(value) -> tuple[int, ...]:
     return tuple(v for v in (value if isinstance(value, list) else [value]) if isinstance(v, int))
 
 
+_ACRONYM = re.compile(r"(?:[^\W\d_]\.)+[^\W\d_]?")  # w.l. / s.w.a.t / a.i.
+
+
+def _title_word(word: str) -> str:
+    """Title case for one word; a dotted acronym keeps every letter upper case (W.L., S.W.A.T.)."""
+    return word.upper() if _ACRONYM.fullmatch(word) else word[:1].upper() + word[1:]
+
+
 def _is_junk(title: str, junk: set[str]) -> bool:
     tokens = [t for t in _TOKEN_SPLIT.split(title.casefold()) if t]
     return not tokens or all(t in junk for t in tokens) or bool(_DOMAIN.fullmatch(title.strip()))
@@ -67,7 +75,7 @@ def parse_name(name: str, cfg: dict, trace: list[str]) -> Parsed:
                 trace.append(f"title rule {rule['match']!r}: {title!r} -> {new!r}")
                 title = new
         if title in (title.lower(), title.upper()):
-            new = " ".join(w[:1].upper() + w[1:] for w in title.lower().split(" "))
+            new = " ".join(_title_word(w) for w in title.lower().split(" "))
             if new != title:
                 trace.append(f"title case: {title!r} -> {new!r}")
                 title = new
