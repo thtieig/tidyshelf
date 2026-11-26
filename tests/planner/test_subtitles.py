@@ -228,3 +228,11 @@ def test_one_unknown_among_known_gets_default_language(cfg, put):
                 put("forced.srt", b"1\n00:00:01,000 --> 00:00:02,000\nHalt!\n")], cfg, rel)
     assert c.review is None
     assert sorted(kept(c)) == [("English.srt", "en", None), ("forced.srt", "en", "forced")]
+
+
+def test_keep_sdh_alongside_keeps_forced_too(cfg, put):
+    cfg["subtitles"]["keep_sdh_alongside"] = True
+    forced = put("movie.en.forced.srt", b"1\n00:00:01,000 --> 00:00:02,000\nHalt!\n")
+    c = choose([forced, put("sdh.en.sdh.srt", "en_sdh.srt"), put("plain.en.srt", "en_plain.srt")], cfg, rel)
+    assert sorted(kept(c)) == [("movie.en.forced.srt", "en", "forced"), ("plain.en.srt", "en", None),
+                               ("sdh.en.sdh.srt", "en", "sdh")]

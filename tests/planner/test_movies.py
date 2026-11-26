@@ -307,3 +307,44 @@ def test_unreadable_folder_needs_review_not_crash(lib):
         os.chmod(sub_dir, 0o755)
     assert "scan.unreadable" in codes(second) and second["status"] == "needs_review"
     assert first["status"] == "ready"
+
+
+# --- spots where a broken change used to fail no test (review M10) ---
+
+def test_sub_of_a_dropped_idx_is_trashed_with_it(lib):
+    lib.tree("source", f"{FOLDER}/w.mkv")
+    lib.write("source", f"{FOLDER}/w.en.srt", (SUBS / "en_plain.srt").read_bytes())
+    lib.write("source", f"{FOLDER}/w.idx", b"id: en, index: 0\n")
+    lib.write("source", f"{FOLDER}/w.sub", b"\x00" * 10)
+    item = only(lib)
+    trashed = {op["from"].rsplit("/", 1)[1] for op in ops(item, "move") if "trash" in op["to"]}
+    assert trashed == {"w.idx", "w.sub"}
+    assert ops(item, "delete")[-1]["path"] == f"source:{FOLDER}"
+
+
+def test_trash_targets_never_collide_within_a_plan(lib):
+    lib.tree("source", f"{FOLDER}/w.mkv\n{FOLDER}/readme.txt\n{FOLDER}/readme.1.txt\n"
+                       f".tidyshelf-trash/source/{FOLDER}/readme.txt")
+    trash = sorted(op["to"].rsplit("/", 1)[1] for op in ops(only(lib), "move") if "trash" in op["to"])
+    assert trash == ["readme.1.txt", "readme.2.txt"]
+
+
+def test_kept_folder_name_with_illegal_characters_is_cleaned(lib):
+    lib.tree("source", "Who Knows? (2001)/x.mkv")
+    assert ops(only(lib), "mkdir")[0]["path"] == "movies:Who Knows (2001)"
+
+
+def test_extras_folder_keeps_its_parent_folder(lib):
+    lib.tree("source", f"{FOLDER}/w.mkv\n{FOLDER}/Featurettes/making-of.mkv")
+    item = only(lib)
+    assert item["status"] == "ready"
+    assert ops(item, "delete") == []
+    assert not any("Featurettes" in (op.get("from") or op.get("path")) for op in item["ops"])
+    assert "scan.left" in codes(item)
+
+
+def test_subtitle_extension_is_lowercased(lib):
+    lib.tree("source", f"{FOLDER}/w.mkv")
+    lib.write("source", f"{FOLDER}/w.en.SRT", (SUBS / "en_plain.srt").read_bytes())
+    tos = [op["to"] for op in ops(only(lib), "move")]
+    assert "movies:Winter Lights (2004)/Subs/Winter Lights (2004).en.srt" in tos
