@@ -1,0 +1,153 @@
+"""Finding what to plan: candidates in the source root, and the movies already in the library.
+
+Read-only, lstat only: a symlink is never followed, a special file never opened.
+"""
+
+from __future__ import annotations
+
+import os
+import re
+import stat
+from dataclasses import dataclass, field
+
+import tidyshelf_apply
+from tidyshelf.naming import MOVIE_FOLDER_RE
+
+SKIP_TOP = (tidyshelf_apply.TRASH_DIR, tidyshelf_apply.LOCK_NAME)
+
+
+@dataclass
+class Candidate:
+    ref: str
+    path: str
+    is_dir: bool
+    videos: list[str] = field(default_factory=list)
+    subs: list[str] = field(default_factory=list)
+    junk: list[str] = field(default_factory=list)
+    left: list[tuple[str, str]] = field(default_factory=list)  # (ref, reason): never touched
+    dirs: list[str] = field(default_factory=list)  # sub-folders, deepest first
+
+
+class _Rules:
+    def __init__(self, cfg: dict):
+        self.videos = {e.lower() for e in cfg["video"]["extensions"]}
+        self.subs = {e.lower() for e in cfg["subtitles"]["extensions"]}
+        self.junk = [re.compile(p) for p in cfg["junk"]["patterns"]]
+        self.exclude = [re.compile(p) for p in cfg["exclude"]["patterns"]]
+        self.extras = {name.casefold() for name in cfg["parse"]["extras_folders"]}
+
+    def excluded(self, ref: str) -> bool:
+        return any(p.search(ref) for p in self.exclude)
+
+    def kind(self, name: str) -> str:
+        ext = os.path.splitext(name)[1].lower()
+        if ext in self.videos:
+            return "junk" if any(p.search(name) for p in self.junk) else "video"
+        return "sub" if ext in self.subs else "junk"
+
+
+def _skip_top(name: str) -> bool:
+    return name in SKIP_TOP or name.endswith(".journal.jsonl")
+
+
+def _walk(cand: Candidate, path: str, ref: str, rules: _Rules) -> None:
+    for name in sorted(os.listdir(path)):
+        full, child = os.path.join(path, name), f"{ref}/{name}"
+        mode = os.lstat(full).st_mode
+        if rules.excluded(child):
+            cand.left.append((child, "excluded"))
+        elif stat.S_ISLNK(mode):
+            cand.left.append((child, "symlink"))
+        elif stat.S_ISDIR(mode):
+            if name.casefold() in rules.extras:
+                cand.left.append((child, "extras folder"))
+                continue
+            cand.dirs.append(child)
+            _walk(cand, full, child, rules)
+        elif not stat.S_ISREG(mode):
+            cand.left.append((child, "special file"))
+        else:
+            {"video": cand.videos, "sub": cand.subs, "junk": cand.junk}[rules.kind(name)].append(child)
+
+
+def _candidate(root: str, rel: str, rules: _Rules) -> Candidate:
+    ref, path = f"source:{rel}", os.path.join(root, rel)
+    mode = os.lstat(path).st_mode
+    if stat.S_ISLNK(mode) or not (stat.S_ISDIR(mode) or stat.S_ISREG(mode)):
+        return Candidate(ref, path, False, left=[(ref, "symlink" if stat.S_ISLNK(mode) else "special file")])
+    if stat.S_ISREG(mode):
+        cand = Candidate(ref, path, False)
+        {"video": cand.videos, "sub": cand.subs, "junk": cand.junk}[rules.kind(os.path.basename(rel))].append(ref)
+        return cand
+    cand = Candidate(ref, path, True)
+    _walk(cand, path, ref, rules)
+    for bucket in (cand.videos, cand.subs, cand.junk, cand.left):
+        bucket.sort()
+    cand.dirs.sort(key=lambda d: (-d.count("/"), d))
+    return cand
+
+
+def _attach_sidecars(cands: list[Candidate], root: str, rules: _Rules) -> list[Candidate]:
+    """A loose video takes the loose subtitles named after it (Film.mkv + Film.en.srt)."""
+    stems = {os.path.splitext(c.videos[0].split(":", 1)[1])[0]: c for c in cands if not c.is_dir and c.videos}
+    out = []
+    for c in cands:
+        name = c.ref.split(":", 1)[1]
+        if not c.is_dir and c.subs and not c.videos and "/" not in name:
+            owners = [s for s in stems if name.startswith(s + ".")]
+            if owners:
+                stems[max(owners, key=len)].subs.append(c.ref)
+                continue
+        out.append(c)
+    for c in out:
+        c.subs.sort()
+    return out
+
+
+def _resolve(root: str, path: str) -> str:
+    """A ref or a real path to a relative path inside the source root; ValueError otherwise."""
+    if path.startswith("source:"):
+        try:
+            return tidyshelf_apply.split_ref(path)[1]
+        except tidyshelf_apply.PlanError as exc:
+            raise ValueError(f"{path}: not a path inside the source root ({exc})") from None
+    real, base = os.path.realpath(path), os.path.realpath(root)
+    if ":" in path.split("/", 1)[0] or os.path.commonpath([real, base]) != base or real == base:
+        raise ValueError(f"{path}: not a path inside the source root")
+    return os.path.relpath(real, base)
+
+
+def scan_source(cfg: dict, paths: list[str] | None = None) -> list[Candidate]:
+    root, rules = cfg["roots"]["source"], _Rules(cfg)
+    if paths:
+        rels = []
+        for p in paths:
+            rel = _resolve(root, p)
+            if not os.path.lexists(os.path.join(root, rel)):
+                raise ValueError(f"{p}: not found in the source root")
+            rels.append(rel)
+        top = sorted(set(rels))
+        siblings = sorted({n for rel in top if "/" not in rel for n in os.listdir(root)
+                           if n != rel and not _skip_top(n)})
+    else:
+        top = [n for n in sorted(os.listdir(root)) if not _skip_top(n)]
+        siblings = []
+    top = [rel for rel in top if not rules.excluded(f"source:{rel}")]
+    cands = [_candidate(root, rel, rules) for rel in top]
+    extra = [_candidate(root, n, rules) for n in siblings if not rules.excluded(f"source:{n}")
+             and os.path.isfile(os.path.join(root, n)) and not os.path.islink(os.path.join(root, n))]
+    picked = {c.ref for c in cands}
+    attached = _attach_sidecars(cands + [c for c in extra if c.subs and not c.videos], root, rules)
+    return [c for c in attached if c.ref in picked]
+
+
+def library_index(cfg: dict) -> dict[str, str]:
+    """casefold("<Title> (<Year>)") -> movies ref, for each library folder that follows the standard."""
+    root, index = cfg["roots"]["movies"], {}
+    for name in sorted(os.listdir(root)):
+        if not stat.S_ISDIR(os.lstat(os.path.join(root, name)).st_mode):
+            continue
+        m = MOVIE_FOLDER_RE.fullmatch(name)
+        if m:
+            index.setdefault(f"{m['title']} ({m['year']})".casefold(), f"movies:{name}")
+    return index

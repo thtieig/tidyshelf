@@ -17,6 +17,7 @@ import re
 from pathlib import Path
 
 _SIZED = re.compile(r"^(?P<path>.+?)\s+\[(?P<size>\d+)\]$")
+MTIME = 1723000000  # every fixture file gets this mtime, so plans built from fixtures are reproducible
 
 
 def make_tree(root: Path, listing: str) -> Path:
@@ -42,7 +43,17 @@ def make_tree(root: Path, listing: str) -> Path:
         path = root / line
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(b"x" * size)
+        os.utime(path, (MTIME, MTIME))
     return root
+
+
+def write_file(root: Path, rel: str, data: bytes, mtime: int = MTIME) -> Path:
+    """Write one fixture file with exact content and mtime; parents are created."""
+    path = Path(root) / rel
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(data)
+    os.utime(path, (mtime, mtime))
+    return path
 
 
 def list_tree(root: Path) -> list[str]:
