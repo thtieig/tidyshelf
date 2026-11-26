@@ -4,7 +4,8 @@ Tidy a folder of video files in any naming state into a library with one consist
 Kodi/Jellyfin/Plex/Emby-portable naming standard. No AI, no network, no cloud: the same input
 and the same config always give the same plan.
 
-> **Status:** early development. Not usable yet.
+> **Status:** early development. Movies can be planned and applied; series, quality checks and
+> `--audit` are still to come.
 
 **It moves and can delete files.** Read the plan before applying it. Dry-run is the default.
 Keep backups. See [docs/SAFETY.md](docs/SAFETY.md).
@@ -32,8 +33,23 @@ movies = "/mnt/nas/Videos/Movies"
 series = "/mnt/nas/Videos/Series"
 ```
 
-Everything else has defaults. See [docs/ADVANCED.md](docs/ADVANCED.md) to customise,
-and [docs/NAMING.md](docs/NAMING.md) for the naming standard.
+Everything else has defaults. Check it with `tidyshelf config check`.
+
+## Plan, read, apply
+
+```
+tidyshelf plan --out plan.json        # changes nothing; prints each item and the plan id
+tidyshelf explain "source:Some.Folder" # why one item is planned the way it is
+tidyshelf-apply plan.json             # dry-run: shows every step
+tidyshelf-apply plan.json --execute   # does it, after you type the plan id
+```
+
+Items the tool cannot decide (no year, several videos, a clash with the library) are marked
+*needs review* and left alone; fix them with an `[[override]]` and plan again. Junk is moved to
+`.tidyshelf-trash/` in the source folder, never deleted unless you ask for it.
+
+See [docs/ADVANCED.md](docs/ADVANCED.md) to customise, and [docs/NAMING.md](docs/NAMING.md) for
+the naming standard.
 
 ## Licence
 

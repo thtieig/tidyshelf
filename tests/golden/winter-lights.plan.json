@@ -1,0 +1,119 @@
+{
+  "format": 1,
+  "tool": "tidyshelf 0.1.0.dev0",
+  "created": "2026-11-26T20:15:00Z",
+  "items": [
+    {
+      "id": "movie-0001",
+      "kind": "movie",
+      "status": "ready",
+      "source": "source:www.example.com - Winter Lights (2004) 1080p BluRay-GRP",
+      "findings": [
+        {
+          "level": "info",
+          "code": "subtitle.duplicate",
+          "msg": "Winter.Lights.2004.1080p.BluRay.x264.AAC-GRP.srt is identical to Subs/English.eng.srt"
+        },
+        {
+          "level": "warn",
+          "code": "subtitle.language_mismatch",
+          "msg": "Subs/English.eng.srt is labelled English but its text is Romanian (confidence 0.98)"
+        },
+        {
+          "level": "info",
+          "code": "subtitle.dropped_language",
+          "msg": "Subs/English.eng.srt is Romanian (not in subtitles.languages)"
+        },
+        {
+          "level": "warn",
+          "code": "subtitle.ad_cues",
+          "msg": "Subs/English SDH.eng.srt has advertising cues (reported, not removed): 'Subtitles by www.example.com'"
+        }
+      ],
+      "ops": [
+        {
+          "op": "mkdir",
+          "path": "movies:Winter Lights (2004)/Subs"
+        },
+        {
+          "op": "mkdir",
+          "path": "source:.tidyshelf-trash/source/www.example.com - Winter Lights (2004) 1080p BluRay-GRP/Subs"
+        },
+        {
+          "op": "move",
+          "from": "source:www.example.com - Winter Lights (2004) 1080p BluRay-GRP/Winter.Lights.2004.1080p.BluRay.x264.AAC-GRP.mp4",
+          "to": "movies:Winter Lights (2004)/Winter Lights (2004).mp4",
+          "size": 1000,
+          "mtime": 1723000000
+        },
+        {
+          "op": "move",
+          "from": "source:www.example.com - Winter Lights (2004) 1080p BluRay-GRP/Subs/English SDH.eng.srt",
+          "to": "movies:Winter Lights (2004)/Subs/Winter Lights (2004).en.sdh.srt",
+          "size": 3215,
+          "mtime": 1723000000
+        },
+        {
+          "op": "move",
+          "from": "source:www.example.com - Winter Lights (2004) 1080p BluRay-GRP/Subs/Spanish.spa.srt",
+          "to": "movies:Winter Lights (2004)/Subs/Winter Lights (2004).es.srt",
+          "size": 2652,
+          "mtime": 1723000000
+        },
+        {
+          "op": "move",
+          "from": "source:www.example.com - Winter Lights (2004) 1080p BluRay-GRP/Subs/English.eng.srt",
+          "to": "source:.tidyshelf-trash/source/www.example.com - Winter Lights (2004) 1080p BluRay-GRP/Subs/English.eng.srt",
+          "size": 2572,
+          "mtime": 1723000000
+        },
+        {
+          "op": "move",
+          "from": "source:www.example.com - Winter Lights (2004) 1080p BluRay-GRP/Winter.Lights.2004.1080p.BluRay.x264.AAC-GRP.srt",
+          "to": "source:.tidyshelf-trash/source/www.example.com - Winter Lights (2004) 1080p BluRay-GRP/Winter.Lights.2004.1080p.BluRay.x264.AAC-GRP.srt",
+          "size": 2572,
+          "mtime": 1723000000
+        },
+        {
+          "op": "move",
+          "from": "source:www.example.com - Winter Lights (2004) 1080p BluRay-GRP/readme.txt",
+          "to": "source:.tidyshelf-trash/source/www.example.com - Winter Lights (2004) 1080p BluRay-GRP/readme.txt",
+          "size": 86,
+          "mtime": 1723000000
+        },
+        {
+          "op": "set_mode",
+          "path": "movies:Winter Lights (2004)"
+        },
+        {
+          "op": "set_mode",
+          "path": "movies:Winter Lights (2004)/Subs"
+        },
+        {
+          "op": "set_mode",
+          "path": "movies:Winter Lights (2004)/Winter Lights (2004).mp4"
+        },
+        {
+          "op": "set_mode",
+          "path": "movies:Winter Lights (2004)/Subs/Winter Lights (2004).en.sdh.srt"
+        },
+        {
+          "op": "set_mode",
+          "path": "movies:Winter Lights (2004)/Subs/Winter Lights (2004).es.srt"
+        },
+        {
+          "op": "delete",
+          "path": "source:www.example.com - Winter Lights (2004) 1080p BluRay-GRP/Subs",
+          "dir": true,
+          "reason": "empty"
+        },
+        {
+          "op": "delete",
+          "path": "source:www.example.com - Winter Lights (2004) 1080p BluRay-GRP",
+          "dir": true,
+          "reason": "empty"
+        }
+      ]
+    }
+  ]
+}

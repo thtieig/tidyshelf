@@ -1,6 +1,7 @@
 # Advanced configuration
 
-> Skeleton. Sections are filled in as the features land (M2–M6).
+> Movies are covered. Series (M3), quality (M4), audit (M5) and running plan and apply on
+> different machines (M6) are filled in as they land.
 
 Every setting, with its default and a comment, is in
 [`src/tidyshelf/data/defaults.toml`](../src/tidyshelf/data/defaults.toml).
@@ -35,12 +36,80 @@ The brackets are read from the template before any value is filled in, so a titl
 contains `<` or `>` (allowed on Linux) is copied as it is and never mistaken for a marker.
 Templates must not contain `/` or `\`; folders come from the separate folder templates.
 
+## How a movie is read
+
+Each entry directly inside the source folder is one item: a folder, or a loose video together
+with the subtitles named after it (`Film.mkv` + `Film.en.srt`). guessit reads title and year from
+the folder name and from the video's name; when both carry a year and disagree, the folder wins
+(`[parse] folder_beats_file`). A "title" made only of release words (`1080p`, `x264`, ... from
+`junk_tokens` and your `extra_tokens`) counts as no title. A folder already named
+`Title (Year)` keeps its name, including tags like `[ES]`.
+
+`tidyshelf explain PATH` prints every step: what guessit read, which rules hit, what each
+subtitle turned out to be, and the resulting operations.
+
+### Fixing names with rules and overrides
+
+Title rules apply to every title, in order (Python regex, `\1` for groups):
+
+```toml
+[[parse.title_rules]]
+match = '^Example Site - '
+replace = ''
+```
+
+An override decides one item. `match` is a glob on the item's path inside the source folder, or a
+regex after `re:`. The first matching block wins.
+
+```toml
+[[override]]
+match = "Winter.Lights*"
+title = "Winter Lights"
+year = 2004
+
+[[override]]
+match = "re:^Old Rips/"
+ignore = true
+```
+
+## Subtitles
+
+Subtitles are judged by what is inside them, not by their names:
+
+1. Identical files (same content) are kept once.
+2. The language is detected by counting common words; word lists ship for English, Spanish,
+   Italian, French, German, Portuguese, Romanian and Dutch. A confident result (`min_confidence`,
+   default 0.6) wins over the file name; a disagreement is reported. Old 8-bit encodings
+   (Windows-1252, Windows-1250) are recognised.
+3. Languages not in `[subtitles] languages` go to the trash. A language without a word list can
+   still be kept, recognised by its name tag only (`config check` warns).
+4. SDH is recognised by name markers (`sdh_markers`) or by many `[MUSIC]`-style cues; forced by
+   `forced_markers`.
+5. Per language one subtitle is kept: plain over SDH (`prefer = "sdh"` reverses it), then the one
+   with more cues. A forced track is kept as well. `keep_sdh_alongside = true` keeps the SDH next
+   to the plain one. An SDH that is the only good one is kept and named `.sdh`.
+6. VobSub pairs (`.idx` + `.sub`) stay together; a lone `.sub` or `.idx` is junk.
+
+Advertising cues at the start or end (`ad_patterns`, plus your own `ad_patterns_extra`) and
+subtitles with very few cues are reported, never edited.
+
+## Junk
+
+Everything that is not a video or a subtitle, plus files matching `[junk] patterns` (samples,
+`.DISABLE.` files), is junk. With `junk_action = "trash"` (the default) it is moved to
+`source:.tidyshelf-trash/<root>/<original path>`, where you can check it and empty it yourself;
+`"delete"` deletes it instead (capped by `[safety]`). Symlinks, special files, excluded paths and
+extras folders (`[parse] extras_folders`) are left untouched, and so is the folder that holds them.
+
 ## I want ...
 
-- *Plex-style names* — (M2)
-- *to keep SDH subtitles as well* — `keep_sdh_alongside = true` in `[subtitles]` (M2)
+- *Plex-style names* — later (only the `kodi` preset exists today)
+- *to keep SDH subtitles as well* — `keep_sdh_alongside = true` in `[subtitles]`
+- *SDH rather than plain* — `prefer = "sdh"` in `[subtitles]`
+- *junk deleted, not trashed* — `junk_action = "delete"` in `[junk]`
 - *to skip a folder* — add a regex to `[exclude] patterns`, e.g. `'^movies:_keep-out(/|$)'`
-- *to fix one item by hand* — an `[[override]]` block (M2)
+- *to fix one item by hand* — an `[[override]]` block (see above)
+- *to see why something was named that way* — `tidyshelf explain PATH`
 - *a show that numbers episodes oddly* — (M3)
 - *a different quality policy* — `[video.quality]` (M4)
 - *to run plan and apply on different machines* — (M6)
