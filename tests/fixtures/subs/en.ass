@@ -4,17 +4,31 @@ ScriptType: v4.00+
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
-Dialogue: 0,0:00:00.00,0:00:02.00,Default,,0,0,0,,{\i1}Where were you last night? I was waiting for you.{\i0}
-Dialogue: 0,0:00:03.00,0:00:05.00,Default,,0,0,0,,{\i1}I know,\NI'm sorry. The train was late and my phone was dead.{\i0}
-Dialogue: 0,0:00:06.00,0:00:08.00,Default,,0,0,0,,{\i1}You could have called from the station.{\i0}
-Dialogue: 0,0:00:09.00,0:00:11.00,Default,,0,0,0,,{\i1}There was nobody there,\Nand it was snowing so hard I could not see the road.{\i0}
-Dialogue: 0,0:00:12.00,0:00:14.00,Default,,0,0,0,,{\i1}Well,\Nyou are here now. Come in and sit by the fire.{\i0}
-Dialogue: 0,0:00:15.00,0:00:17.00,Default,,0,0,0,,{\i1}Thank you. Is your mother still awake?{\i0}
-Dialogue: 0,0:00:18.00,0:00:20.00,Default,,0,0,0,,{\i1}She went to bed an hour ago. She said to tell you that she is happy you came.{\i0}
-Dialogue: 0,0:00:21.00,0:00:23.00,Default,,0,0,0,,{\i1}I have something for her. It is in my bag,\Nbut it can wait until the morning.{\i0}
-Dialogue: 0,0:00:24.00,0:00:26.00,Default,,0,0,0,,{\i1}Do you want some tea? There is soup as well,\Nif you are hungry.{\i0}
-Dialogue: 0,0:00:27.00,0:00:29.00,Default,,0,0,0,,{\i1}Just tea,\Nplease. I ate on the way, but it was not very good.{\i0}
-Dialogue: 0,0:00:30.00,0:00:32.00,Default,,0,0,0,,{\i1}We should talk about what happened at the house.{\i0}
-Dialogue: 0,0:00:33.00,0:00:35.00,Default,,0,0,0,,{\i1}I know we should. But not tonight. Tonight I just want to be here with you.{\i0}
-Dialogue: 0,0:00:36.00,0:00:38.00,Default,,0,0,0,,{\i1}All right. Tomorrow,\Nthen. And this time you will tell me everything.{\i0}
-Dialogue: 0,0:00:39.00,0:00:41.00,Default,,0,0,0,,{\i1}I will. I promise. Now,\Nwhere did you put the good cups?{\i0}
+Dialogue: 0,0:00:00.00,0:00:01.00,Default,,0,0,0,,{\i1}Where were you last night? I was waiting for you.{\i0}
+Dialogue: 0,0:00:02.00,0:00:03.00,Default,,0,0,0,,{\i1}I know,\NI'm sorry. The train was late and my phone was dead.{\i0}
+Dialogue: 0,0:00:04.00,0:00:05.00,Default,,0,0,0,,{\i1}You could have called from the station.{\i0}
+Dialogue: 0,0:00:06.00,0:00:07.00,Default,,0,0,0,,{\i1}There was nobody there,\Nand it was snowing so hard I could not see the road.{\i0}
+Dialogue: 0,0:00:08.00,0:00:09.00,Default,,0,0,0,,{\i1}Well,\Nyou are here now. Come in and sit by the fire.{\i0}
+Dialogue: 0,0:00:10.00,0:00:11.00,Default,,0,0,0,,{\i1}Thank you. Is your mother still awake?{\i0}
+Dialogue: 0,0:00:12.00,0:00:13.00,Default,,0,0,0,,{\i1}She went to bed an hour ago. She said to tell you that she is happy you came.{\i0}
+Dialogue: 0,0:00:14.00,0:00:15.00,Default,,0,0,0,,{\i1}I have something for her. It is in my bag,\Nbut it can wait until the morning.{\i0}
+Dialogue: 0,0:00:16.00,0:00:17.00,Default,,0,0,0,,{\i1}Do you want some tea? There is soup as well,\Nif you are hungry.{\i0}
+Dialogue: 0,0:00:18.00,0:00:19.00,Default,,0,0,0,,{\i1}Just tea,\Nplease. I ate on the way, but it was not very good.{\i0}
+Dialogue: 0,0:00:20.00,0:00:21.00,Default,,0,0,0,,{\i1}We should talk about what happened at the house.{\i0}
+Dialogue: 0,0:00:22.00,0:00:23.00,Default,,0,0,0,,{\i1}I know we should. But not tonight. Tonight I just want to be here with you.{\i0}
+Dialogue: 0,0:00:24.00,0:00:25.00,Default,,0,0,0,,{\i1}All right. Tomorrow,\Nthen. And this time you will tell me everything.{\i0}
+Dialogue: 0,0:00:26.00,0:00:27.00,Default,,0,0,0,,{\i1}I will. I promise. Now,\Nwhere did you put the good cups?{\i0}
+Dialogue: 0,0:00:28.00,0:00:29.00,Default,,0,0,0,,{\i1}Where were you last night? I was waiting for you.{\i0}
+Dialogue: 0,0:00:30.00,0:00:31.00,Default,,0,0,0,,{\i1}I know,\NI'm sorry. The train was late and my phone was dead.{\i0}
+Dialogue: 0,0:00:32.00,0:00:33.00,Default,,0,0,0,,{\i1}You could have called from the station.{\i0}
+Dialogue: 0,0:00:34.00,0:00:35.00,Default,,0,0,0,,{\i1}There was nobody there,\Nand it was snowing so hard I could not see the road.{\i0}
+Dialogue: 0,0:00:36.00,0:00:37.00,Default,,0,0,0,,{\i1}Well,\Nyou are here now. Come in and sit by the fire.{\i0}
+Dialogue: 0,0:00:38.00,0:00:39.00,Default,,0,0,0,,{\i1}Thank you. Is your mother still awake?{\i0}
+Dialogue: 0,0:00:40.00,0:00:41.00,Default,,0,0,0,,{\i1}She went to bed an hour ago. She said to tell you that she is happy you came.{\i0}
+Dialogue: 0,0:00:42.00,0:00:43.00,Default,,0,0,0,,{\i1}I have something for her. It is in my bag,\Nbut it can wait until the morning.{\i0}
+Dialogue: 0,0:00:44.00,0:00:45.00,Default,,0,0,0,,{\i1}Do you want some tea? There is soup as well,\Nif you are hungry.{\i0}
+Dialogue: 0,0:00:46.00,0:00:47.00,Default,,0,0,0,,{\i1}Just tea,\Nplease. I ate on the way, but it was not very good.{\i0}
+Dialogue: 0,0:00:48.00,0:00:49.00,Default,,0,0,0,,{\i1}We should talk about what happened at the house.{\i0}
+Dialogue: 0,0:00:50.00,0:00:51.00,Default,,0,0,0,,{\i1}I know we should. But not tonight. Tonight I just want to be here with you.{\i0}
+Dialogue: 0,0:00:52.00,0:00:53.00,Default,,0,0,0,,{\i1}All right. Tomorrow,\Nthen. And this time you will tell me everything.{\i0}
+Dialogue: 0,0:00:54.00,0:00:55.00,Default,,0,0,0,,{\i1}I will. I promise. Now,\Nwhere did you put the good cups?{\i0}

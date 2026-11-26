@@ -53,3 +53,59 @@ Muy bien. Mañana, entonces. Y esta vez me lo vas a contar todo.
 14
 00:00:42,000 --> 00:00:44,500
 Te lo contaré todo, te lo prometo. ¿Dónde pusiste las tazas buenas?
+
+15
+00:00:45,000 --> 00:00:47,500
+¿Dónde estabas anoche? Te estuve esperando.
+
+16
+00:00:48,000 --> 00:00:50,500
+Lo sé, lo siento. El tren llegó tarde y mi teléfono no tenía batería.
+
+17
+00:00:51,000 --> 00:00:53,500
+Podías haber llamado desde la estación.
+
+18
+00:00:54,000 --> 00:00:56,500
+No había nadie allí, y nevaba tanto que no se veía el camino.
+
+19
+00:00:57,000 --> 00:00:59,500
+Bueno, ahora estás aquí. Pasa y siéntate junto al fuego.
+
+20
+00:01:00,000 --> 00:01:02,500
+Gracias. ¿Tu madre todavía está despierta?
+
+21
+00:01:03,000 --> 00:01:05,500
+Se fue a la cama hace una hora. Me dijo que te dijera que está contenta de que vinieras.
+
+22
+00:01:06,000 --> 00:01:08,500
+Tengo algo para ella. Está en mi bolsa, pero puede esperar hasta mañana.
+
+23
+00:01:09,000 --> 00:01:11,500
+¿Quieres un té? También hay sopa, si tienes hambre.
+
+24
+00:01:12,000 --> 00:01:14,500
+Solo té, por favor. Comí por el camino, pero no estaba muy bueno.
+
+25
+00:01:15,000 --> 00:01:17,500
+Tenemos que hablar de lo que pasó en la casa.
+
+26
+00:01:18,000 --> 00:01:20,500
+Lo sé. Pero no esta noche. Esta noche solo quiero estar aquí contigo, señor mío.
+
+27
+00:01:21,000 --> 00:01:23,500
+Muy bien. Mañana, entonces. Y esta vez me lo vas a contar todo.
+
+28
+00:01:24,000 --> 00:01:26,500
+Te lo contaré todo, te lo prometo. ¿Dónde pusiste las tazas buenas?

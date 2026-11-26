@@ -92,3 +92,9 @@ def detect(data: bytes, ext: str, wordlists: dict) -> Detection:
     if any_hits < MIN_WORDS:
         return Detection(None, 0.0, any_hits, enc)
     return Detection(lang, round(hits / any_hits, 2), any_hits, enc)
+
+
+def read_cues(data: bytes, ext: str, encoding: str) -> list[str]:
+    """Cue texts of `data` decoded the way detect() chose."""
+    codec = "utf-8-sig" if encoding == "utf-8" else encoding
+    return cue_texts(data.decode(codec, errors="replace"), ext)
