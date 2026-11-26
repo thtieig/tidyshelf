@@ -36,11 +36,11 @@ def failing_rename_after(monkeypatch, n):
     real = os.rename
     calls = {"n": 0}
 
-    def rename(a, b):
+    def rename(*a, **kw):
         calls["n"] += 1
         if calls["n"] == n + 1:
             raise PermissionError(13, "Permission denied")
-        return real(a, b)
+        return real(*a, **kw)
 
     monkeypatch.setattr(ta.os, "rename", rename)
 
@@ -60,7 +60,7 @@ def test_rollback_restores_moves_and_removes_created_dirs(env, monkeypatch):
     before = env.snapshot()
     failing_rename_after(monkeypatch, 1)
     r = env.execute(plan)
-    assert r.code == 3
+    assert r.code == 1  # an I/O error, not a refusal
     assert "rolled back" in r.err
     monkeypatch.undo()
     assert [p for p in env.snapshot() if not p.endswith(".tidyshelf.lock")] == before
@@ -73,7 +73,7 @@ def test_rollback_keeps_preexisting_parent(env, monkeypatch):
     (env.movies / "A (2000)" / "poster.jpg").write_bytes(b"p")
     plan = rollback_plan(env)
     failing_rename_after(monkeypatch, 1)
-    assert env.execute(plan).code == 3
+    assert env.execute(plan).code == 1
     assert (env.movies / "A (2000)").is_dir()
     assert not (env.movies / "A (2000)" / "Subs").exists()
     assert (env.source / "A" / "a.mkv").exists()
@@ -84,18 +84,19 @@ def test_rollback_skipped_if_destination_changed(env, monkeypatch):
     real = os.rename
     calls = {"n": 0}
 
-    def rename(a, b):
+    def rename(a, b, **kw):
         calls["n"] += 1
         if calls["n"] == 1:
-            real(a, b)
-            with open(b, "ab") as fh:  # someone writes to the file right after it lands
-                fh.write(b"more")
+            real(a, b, **kw)
+            fd = os.open(b, os.O_WRONLY | os.O_APPEND, dir_fd=kw["dst_dir_fd"])
+            os.write(fd, b"more")  # someone writes to the file right after it lands
+            os.close(fd)
             return None
         raise PermissionError(13, "Permission denied")
 
     monkeypatch.setattr(ta.os, "rename", rename)
     r = env.execute(plan)
-    assert r.code == 3
+    assert r.code == 1
     assert "not rolled back" in r.err
     assert (env.movies / "A (2000)" / "A (2000).mkv").exists()
     assert not (env.source / "A" / "a.mkv").exists()
@@ -113,7 +114,7 @@ def test_partial_on_delete_failure(env, monkeypatch):
 
     monkeypatch.setattr(ta.os, "unlink", unlink)
     r = env.execute(plan)
-    assert r.code == 3
+    assert r.code == 1
     assert "partial" in r.err
     assert (env.movies / "a.mkv").exists(), "no rollback once deletes started"
     assert [e for e in env.journal() if e.get("t") == "item"][-1]["result"] == "partial"

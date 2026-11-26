@@ -51,14 +51,28 @@ def test_begin_is_on_disk_before_rename(env, monkeypatch):
     seen = []
     real = os.rename
 
-    def rename(a, b):
+    def rename(*a, **kw):
         lines = env.journal_path.read_text(encoding="utf-8").splitlines()
         seen.append(json.loads(lines[-1]))
-        return real(a, b)
+        return real(*a, **kw)
 
     monkeypatch.setattr(ta.os, "rename", rename)
     assert env.execute(plan).code == 0
     assert seen and seen[0]["t"] == "begin" and seen[0]["op"]["op"] == "move"
+
+
+def test_mkdir_is_on_disk_before_the_folder_is_made(env, monkeypatch):
+    plan = movie_plan(env)
+    seen = []
+    real = os.mkdir
+
+    def mkdir(*a, **kw):
+        seen.append(json.loads(env.journal_path.read_text(encoding="utf-8").splitlines()[-1]))
+        return real(*a, **kw)
+
+    monkeypatch.setattr(ta.os, "mkdir", mkdir)
+    assert env.execute(plan).code == 0
+    assert seen == [{"t": "mkdir", "item": "movie-0001", "path": "movies:Some Film (1999)"}]
 
 
 def test_crash_resume_skips_done_ops(env, monkeypatch):
@@ -95,17 +109,20 @@ def test_rerun_of_finished_plan_is_a_noop(env):
 def test_journal_of_another_plan_refused(env):
     plan = movie_plan(env)
     env.journal_path.write_text(json.dumps({"t": "header", "plan_id": "ffffffffffff"}) + "\n", encoding="utf-8")
+    os.chmod(env.journal_path, 0o644)
     r = env.execute(plan)
     assert r.code == 3
     assert "another plan" in r.err
 
 
-def undo_args(env, *extra):
-    return [str(env.journal_path), "--undo", *extra]
-
-
 def run_undo(env, *extra):
-    return env.run(None, "--undo", str(env.journal_path), *extra)
+    """Undo takes the plan; the journal is found next to it, as for a normal run."""
+    return env.run(None, str(env.plan_path), "--undo", *extra)
+
+
+def write_journal(env, entries):
+    env.journal_path.write_text("".join(json.dumps(e) + "\n" for e in entries), encoding="utf-8")
+    os.chmod(env.journal_path, 0o644)
 
 
 def test_undo_reverses_moves_only(env):
@@ -190,3 +207,124 @@ def test_rerun_with_nothing_to_do_takes_no_confirmation(env, monkeypatch):
     monkeypatch.setattr(ta, "_isatty", lambda: False)
     assert env.run(plan, "--execute").code == 0  # no --yes needed: nothing would change
     assert len(env.journal()) == lines
+
+
+def test_undo_ignores_a_journal_move_the_plan_does_not_have(env):
+    """A planted journal line cannot make undo move a library file into source."""
+    plan = movie_plan(env)
+    assert env.execute(plan).code == 0
+    env.tree("movies", "Other (2000)/Other (2000).mkv [10]")
+    size, mtime = env.stat("movies:Other (2000)/Other (2000).mkv")
+    entries = env.journal()
+    entries.append({"t": "done", "item": "movie-0001", "n": 1, "op": {
+        "op": "move", "from": "source:evil/x.mkv", "to": "movies:Other (2000)/Other (2000).mkv",
+        "size": size, "mtime": mtime}})
+    write_journal(env, entries)
+    r = run_undo(env, "--execute", "--yes")
+    assert r.code == 3
+    assert "not in the plan" in r.err
+    assert (env.movies / "Other (2000)" / "Other (2000).mkv").exists()
+    assert not (env.source / "evil").exists()
+
+
+def test_undo_ignores_a_journal_mkdir_the_plan_does_not_have(env):
+    plan = movie_plan(env)
+    assert env.execute(plan).code == 0
+    (env.movies / "Unrelated").mkdir()
+    write_journal(env, env.journal() + [{"t": "mkdir", "item": "movie-0001", "path": "movies:Unrelated"}])
+    r = run_undo(env, "--execute", "--yes")
+    assert r.code == 3
+    assert "not in the plan" in r.err
+    assert (env.movies / "Unrelated").is_dir()
+
+
+def test_undo_of_a_journal_from_another_plan_refused(env):
+    plan = movie_plan(env)
+    assert env.execute(plan).code == 0
+    entries = env.journal()
+    entries[0]["plan_id"] = "ffffffffffff"
+    write_journal(env, entries)
+    r = run_undo(env, "--execute", "--yes")
+    assert r.code == 3
+    assert "another plan" in r.err
+
+
+@pytest.mark.parametrize("entry", [
+    {"t": "done", "item": ["x"], "n": 0, "op": {"op": "mkdir", "path": "movies:a"}},
+    {"t": "done", "item": "movie-0001", "n": {}, "op": {"op": "mkdir", "path": "movies:a"}},
+    {"t": "mkdir", "item": "movie-0001", "path": 5},
+])
+def test_undo_with_malformed_journal_line_is_refused_cleanly(env, entry):
+    plan = movie_plan(env)
+    assert env.execute(plan).code == 0
+    write_journal(env, env.journal() + [entry])
+    assert run_undo(env, "--execute", "--yes").code == 3
+
+
+def test_existing_journal_writable_by_others_is_refused(env):
+    plan = movie_plan(env)
+    write_journal(env, [{"t": "header", "plan_id": plan.plan_id}])
+    os.chmod(env.journal_path, 0o666)
+    r = env.execute(plan)
+    assert r.code == 3
+    assert "writable by others" in r.err
+    assert (env.source / "Some.Film.1999.1080p" / "film.mkv").exists()
+
+
+def test_undo_json_output(env):
+    plan = movie_plan(env)
+    assert env.execute(plan).code == 0
+    r = run_undo(env, "--json")
+    assert r.code == 2
+    doc = r.json()
+    assert doc["plan_id"] == plan.plan_id and doc["exit"] == 2
+    assert doc["moves"] == [{"from": "movies:Some Film (1999)/Some Film (1999).mkv",
+                             "to": "source:Some.Film.1999.1080p/film.mkv"}]
+
+
+def test_undo_failing_midway_reports_partial(env, monkeypatch):
+    env.tree("source", "a.mkv\nb.mkv")
+    plan = Plan()
+    item = plan.item("i1", "movie")
+    item.move("source:a.mkv", "movies:a.mkv", *env.stat("source:a.mkv"))
+    item.move("source:b.mkv", "movies:b.mkv", *env.stat("source:b.mkv"))
+    assert env.execute(plan).code == 0
+    real, calls = ta.os.rename, []
+
+    def rename(*a, **kw):
+        calls.append(a)
+        if len(calls) == 2:
+            raise PermissionError(13, "Permission denied")
+        return real(*a, **kw)
+
+    monkeypatch.setattr(ta.os, "rename", rename)
+    r = run_undo(env, "--execute", "--yes")
+    assert r.code == 1
+    assert "partial" in r.err and "1 of 2" in r.err
+    monkeypatch.undo()
+    assert run_undo(env, "--execute", "--yes").code == 0  # run again to finish
+    assert (env.source / "a.mkv").exists() and (env.source / "b.mkv").exists()
+
+
+def test_undo_given_the_journal_instead_of_the_plan_says_so(env):
+    plan = movie_plan(env)
+    assert env.execute(plan).code == 0
+    r = env.run(None, str(env.journal_path), "--undo")
+    assert r.code == 1
+    assert "plan file, not the journal" in r.err
+
+
+def test_io_error_names_the_plan_paths(env):
+    env.tree("source", "a.mkv")
+    (env.movies / "ro").mkdir()
+    plan = Plan()
+    plan.item("i1", "movie").move("source:a.mkv", "movies:ro/a.mkv", *env.stat("source:a.mkv"))
+    os.chmod(env.movies / "ro", 0o555)
+    try:
+        if os.access(env.movies / "ro", os.W_OK):
+            pytest.skip("running as root")
+        r = env.execute(plan)
+    finally:
+        os.chmod(env.movies / "ro", 0o755)
+    assert r.code == 1
+    assert "source:a.mkv -> movies:ro/a.mkv" in r.err

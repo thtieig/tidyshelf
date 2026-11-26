@@ -137,3 +137,12 @@ def test_missing_roots_are_warnings_not_errors(tmp_path):
 def test_all_errors_are_collected():
     errs = errors(nmaing={}, safety={"max_delete_files": "x"}, junk={"junk_action": "shred"})
     assert len(errs) == 3
+
+
+@pytest.mark.parametrize("over, needle", [
+    ({"safety": {"max_age": "1h\n"}}, "safety.max_age"),
+    ({"owner": {"dir_mode": "0775\n"}}, "owner.dir_mode"),
+    ({"subtitles": {"default_language": "en\n"}}, "subtitles.default_language"),
+])
+def test_formats_reject_a_trailing_newline(over, needle):
+    assert any(needle in e for e in errors(**over)), errors(**over)

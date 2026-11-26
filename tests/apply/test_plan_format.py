@@ -252,3 +252,52 @@ def test_unknown_only_or_skip_id_exit_3(env):
     plan = movie_plan(env)
     assert env.run(plan, "--only", "nope").code == 3
     assert env.run(plan, "--skip", "nope").code == 3
+
+
+@pytest.mark.parametrize("text", [
+    '{"format": 1, "items": [{"id": "a", "kind": "movie", "status": "ready", "ops": [{"op": []}]}]}',
+    '{"format": 1, "items": [{"id": "a", "kind": "movie", "status": "ready", '
+    '"ops": [{"op": "mkdir", "path": "movies:\\ud800x"}]}]}',
+    '{"format": 1, "items": [], "x": 1' + "0" * 5000 + "}",
+    "[" * 100000 + "]" * 100000,
+])
+def test_hostile_json_is_a_clean_refusal(env, text):
+    r = env.run(text)
+    assert r.code == 3, r.err
+    assert "Traceback" not in r.err
+
+
+@pytest.mark.parametrize("field", ["id", "kind"])
+def test_trailing_newline_in_id_or_kind_refused(field):
+    doc = base_doc()
+    doc["items"][0][field] += "\n"
+    with pytest.raises(ta.PlanError):
+        ta.validate_plan(doc)
+
+
+def test_approve_accepts_a_longer_prefix_of_the_full_hash(env):
+    plan = movie_plan(env)
+    full = ta.plan_hash(plan.to_dict())
+    assert full.startswith(plan.plan_id) and len(full) == 64
+    assert env.run(plan, "--approve", full[:20]).code == 2
+    assert env.run(plan, "--approve", full).code == 2
+    assert env.run(plan, "--approve", full[:11]).code == 3
+    assert env.run(plan, "--approve", full[:19] + ("0" if full[19] != "0" else "1")).code == 3
+    assert full in env.run(plan).out
+
+
+def test_max_age_refuses_a_plan_from_the_future(env):
+    r = env.run(_aged(movie_plan(env), -1), "--max-age", "24h")
+    assert r.code == 3
+    assert "future" in r.err
+
+
+def test_max_age_small_clock_skew_is_fine(env):
+    doc = movie_plan(env).to_dict()
+    doc["created"] = (dt.datetime.now(dt.timezone.utc) + dt.timedelta(minutes=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    assert env.run(doc, "--max-age", "24h").code == 2
+
+
+def test_max_age_uses_the_stricter_of_flag_and_config(env):
+    env.write_config('[safety]\nmax_age = "1h"\n')
+    assert env.run(_aged(movie_plan(env), 2), "--max-age", "7d").code == 3

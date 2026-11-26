@@ -127,7 +127,7 @@ def test_cross_device_detected_in_preflight(env, monkeypatch):
 def test_exdev_at_rename_is_a_refusal_not_a_copy(env, monkeypatch):
     env.tree("source", "a.mkv")
 
-    def fake_rename(a, b):
+    def fake_rename(*a, **kw):
         raise OSError(errno.EXDEV, "Invalid cross-device link")
 
     monkeypatch.setattr(ta.os, "rename", fake_rename)

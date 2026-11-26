@@ -59,17 +59,17 @@ ARRAY_TABLES: dict[tuple, dict] = {
     ("parse", "title_rules"): {"match": (str, True), "replace": (str, True)},
 }
 
-_LANG = re.compile(r"^[a-z]{2}$")
-_DURATION = re.compile(r"^$|^\d+[smhd]$")
-_MODE = re.compile(r"^$|^0?[0-7]{3}$")
+_LANG = re.compile(r"[a-z]{2}")
+_DURATION = re.compile(r"(\d+[smhd])?")
+_MODE = re.compile(r"(0?[0-7]{3})?")
 FORMATS: dict[tuple, tuple] = {
     ("subtitles", "languages"): (_LANG, "must be a two-letter lowercase ISO 639-1 code"),
     ("subtitles", "default_language"): (_LANG, "must be a two-letter lowercase ISO 639-1 code"),
     ("safety", "max_age"): (_DURATION, "must be empty or a duration like 30m, 24h, 7d"),
     ("owner", "dir_mode"): (_MODE, "must be empty or an octal mode like 0775"),
     ("owner", "file_mode"): (_MODE, "must be empty or an octal mode like 0775"),
-    ("video", "extensions"): (re.compile(r"^\."), "must start with '.'"),
-    ("subtitles", "extensions"): (re.compile(r"^\."), "must start with '.'"),
+    ("video", "extensions"): (re.compile(r"\.[^\s/]*"), "must start with '.'"),
+    ("subtitles", "extensions"): (re.compile(r"\.[^\s/]*"), "must start with '.'"),
 }
 
 _TYPE_NAMES = {bool: "boolean", int: "integer", float: "float", str: "string", list: "list", dict: "table"}
@@ -202,7 +202,7 @@ def _check_scalar(path: tuple, value, expected: type, errors: list) -> None:
         errors.append(f"{_fmt(path)}: must not be negative")
     if key in ENUMS and value not in ENUMS[key]:
         errors.append(f"{_fmt(path)}: must be one of {', '.join(repr(v) for v in sorted(ENUMS[key]))}")
-    if key in FORMATS and not FORMATS[key][0].search(value):
+    if key in FORMATS and not FORMATS[key][0].fullmatch(value):
         errors.append(f"{_fmt(path)}: {FORMATS[key][1]}")
     if key == ("override", "match") and value.startswith("re:"):
         key, value = ("override", "match", "re"), value[3:]

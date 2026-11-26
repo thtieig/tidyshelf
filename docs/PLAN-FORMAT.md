@@ -84,8 +84,11 @@ The plan id is not stored in the file; both sides compute it:
 ```python
 canon = [[item["id"], item["status"], item["ops"]] for item in plan["items"]]
 data = json.dumps(canon, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
-plan_id = hashlib.sha256(data.encode("ascii")).hexdigest()[:12]
+plan_hash = hashlib.sha256(data.encode("ascii")).hexdigest()
+plan_id = plan_hash[:12]
 ```
+
+`--approve` accepts the plan id or any longer prefix of `plan_hash`.
 
 `created`, `tool`, `kind`, `source` and `findings` do not affect it; any change to an op, to the
 order of ops or items, to an item id or status does.
@@ -102,8 +105,8 @@ surrogate escape (`\udce9`) and round-trips back to the same byte on a Linux fil
 | `t` | Fields | Written |
 |---|---|---|
 | `header` | `plan_id`, `plan_size`, `plan_mtime`, `started`, `tool` | at the start of every run |
-| `mkdir` | `item`, `path` | after each folder level is created |
+| `mkdir` | `item`, `path` | before each folder level is created |
 | `begin` / `done` | `item`, `n` (op index), `op` | before / after each operation |
 | `rollback` | `item`, `op` or `rmdir`, `result` | when a failed item is rolled back |
 | `item` | `item`, `result` (`ok`, `rolled_back`, `failed`, `partial`) | at the end of each item |
-| `undo_*` | as above | written by `--undo` |
+| `undo_*` | as above | written by `--undo`, which ignores them when it reads the journal |

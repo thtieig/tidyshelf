@@ -91,3 +91,14 @@ def test_layers_and_env_var(env, monkeypatch, tmp_path):
     other.write_text("[safety]\nmax_delete_files = 7\n", encoding="utf-8")
     monkeypatch.setenv("TIDYSHELF_CONFIG", str(other))
     assert ta.load_apply_config(None)["safety"]["max_delete_files"] == 7
+
+
+@pytest.mark.parametrize("extra, needle", [
+    ('[safety]\nmax_age = "1h\\n"\n', "safety.max_age"),
+    ('[owner]\nfile_mode = "0644\\n"\n', "owner.file_mode"),
+])
+def test_trailing_newline_in_max_age_or_mode_refused(env, extra, needle):
+    env.write_config(extra)
+    r = env.run({"format": 1, "items": []})
+    assert r.code == 1
+    assert needle in r.err

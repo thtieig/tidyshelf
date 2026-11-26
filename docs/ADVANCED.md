@@ -31,7 +31,8 @@ episode_file = "S{season:02}{episodes}< - {episode_title}>"
 # S01E23-E24 - Finale  (multi-episode: {episodes} = "E23-E24")
 ```
 
-`<` and `>` cannot appear in real file names, so they are free to use as markers.
+The brackets are read from the template before any value is filled in, so a title that itself
+contains `<` or `>` (allowed on Linux) is copied as it is and never mistaken for a marker.
 Templates must not contain `/` or `\`; folders come from the separate folder templates.
 
 ## I want ...

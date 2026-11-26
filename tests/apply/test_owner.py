@@ -49,7 +49,7 @@ def test_chown_skipped_when_not_privileged(env, monkeypatch):
     env.write_config('[owner]\nuser = "root"\ngroup = "root"\n')
     calls = []
     monkeypatch.setattr(ta.os, "geteuid", lambda: 1000)
-    monkeypatch.setattr(ta.os, "chown", lambda *a, **kw: calls.append(a))
+    monkeypatch.setattr(ta.os, "fchown", lambda *a, **kw: calls.append(a))
     r = env.execute(mode_plan(env))
     assert r.code == 0, r.err
     assert calls == []
@@ -60,7 +60,8 @@ def test_chown_with_configured_ids_when_privileged(env, monkeypatch):
     env.write_config('[owner]\nuser = "root"\ngroup = "root"\n')
     calls = []
     monkeypatch.setattr(ta.os, "geteuid", lambda: 0)
-    monkeypatch.setattr(ta.os, "chown", lambda path, uid, gid, **kw: calls.append((os.path.basename(path), uid, gid)))
+    monkeypatch.setattr(ta.os, "fchown", lambda fd, uid, gid: calls.append(
+        (os.path.basename(os.readlink(f"/proc/self/fd/{fd}")), uid, gid)))
     r = env.execute(mode_plan(env))
     assert r.code == 0, r.err
     assert calls == [("A", 0, 0), ("a.mkv", 0, 0)]

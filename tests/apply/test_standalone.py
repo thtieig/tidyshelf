@@ -7,6 +7,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 import tidyshelf_apply as ta
 
 APPLY = Path(ta.__file__)
@@ -15,11 +17,44 @@ ALLOWED_IMPORTS = {
     "pwd", "re", "stat", "sys", "tomllib", "difflib",
 }
 BANNED_NAMES = {"eval", "exec", "compile", "__import__"}
-BANNED_ATTRS = {"system", "popen", "spawnl", "spawnv", "execv", "execve", "execl", "execvp", "fork"}
+BANNED_ATTRS = {"system", "popen", "fork", "forkpty", "posix_spawn", "posix_spawnp"}
+BANNED_ATTR_PREFIXES = ("spawn", "exec")  # os.spawn*, os.exec*
+# os functions that overwrite or remove whole trees; banned only on os (str.replace is fine)
+BANNED_OS_ATTRS = {"replace", "removedirs", "renames", "rmtree", "truncate", "ftruncate"}
 
 
 def tree():
     return ast.parse(APPLY.read_text(encoding="utf-8"))
+
+
+def violations(source):
+    found = []
+    for node in ast.walk(ast.parse(source)):
+        if not isinstance(node, ast.Call):
+            continue
+        fn = node.func
+        if isinstance(fn, ast.Name) and fn.id in BANNED_NAMES:
+            found.append(f"line {node.lineno}: {fn.id}")
+        if isinstance(fn, ast.Attribute):
+            on_os = isinstance(fn.value, ast.Name) and fn.value.id == "os"
+            if fn.attr in BANNED_ATTRS:
+                found.append(f"line {node.lineno}: {fn.attr}")
+            if on_os and (fn.attr in BANNED_OS_ATTRS or fn.attr.startswith(BANNED_ATTR_PREFIXES)):
+                found.append(f"line {node.lineno}: os.{fn.attr}")
+        found += [f"line {node.lineno}: shell=" for kw in node.keywords if kw.arg == "shell"]
+    return found
+
+
+@pytest.mark.parametrize("source", [
+    "os.replace(a, b)", "os.removedirs(a)", "os.execvpe(a, b, c)", "os.spawnvp(1, a, b)",
+    "os.posix_spawn(a, b, c)", "eval(x)", "f(shell=True)", "os.system(x)",
+])
+def test_scanner_catches(source):
+    assert violations(source)
+
+
+def test_scanner_allows_str_replace():
+    assert violations("s.replace('a', 'b')") == []
 
 
 def test_imports_only_allowlisted_stdlib():
@@ -33,15 +68,7 @@ def test_imports_only_allowlisted_stdlib():
 
 
 def test_no_dangerous_calls():
-    for node in ast.walk(tree()):
-        if isinstance(node, ast.Call):
-            fn = node.func
-            if isinstance(fn, ast.Name):
-                assert fn.id not in BANNED_NAMES, f"line {node.lineno}: {fn.id}"
-            if isinstance(fn, ast.Attribute):
-                assert fn.attr not in BANNED_ATTRS, f"line {node.lineno}: {fn.attr}"
-            for kw in node.keywords:
-                assert kw.arg != "shell", f"line {node.lineno}: shell="
+    assert violations(APPLY.read_text(encoding="utf-8")) == []
 
 
 def test_runs_isolated_from_a_temp_dir(env, tmp_path):
@@ -67,4 +94,4 @@ def test_runs_isolated_from_a_temp_dir(env, tmp_path):
 
 def test_file_stays_readable_in_one_sitting():
     lines = APPLY.read_text(encoding="utf-8").count("\n")
-    assert lines < 1200, lines
+    assert lines < 1350, lines

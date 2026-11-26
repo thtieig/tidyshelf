@@ -70,8 +70,8 @@ APPLY_DEFAULTS = {
     "owner": {"user": "", "group": "", "dir_mode": "", "file_mode": ""},
     "exclude": {"patterns": []},
 }
-_DURATION = re.compile(r"^(\d+)([smhd])$")
-_MODE = re.compile(r"^0?[0-7]{3}$")
+_DURATION = re.compile(r"(\d+)([smhd])")
+_MODE = re.compile(r"0?[0-7]{3}")
 _TYPE_NAMES = {bool: "boolean", int: "integer", str: "string", list: "list", dict: "table", float: "float"}
 
 
@@ -165,10 +165,10 @@ def load_apply_config(path=None) -> dict:
     if errors:
         raise ConfigError("\n".join(errors))
     safety, owner = cfg["safety"], cfg["owner"]
-    if safety["max_age"] and not _DURATION.match(safety["max_age"]):
+    if safety["max_age"] and not _DURATION.fullmatch(safety["max_age"]):
         errors.append("safety.max_age: must be empty or a duration like 30m, 24h, 7d")
     for key in ("dir_mode", "file_mode"):
-        if owner[key] and not _MODE.match(owner[key]):
+        if owner[key] and not _MODE.fullmatch(owner[key]):
             errors.append(f"owner.{key}: must be empty or an octal mode like 0775")
     root_errors, root_warnings = check_roots(cfg["roots"])
     errors += root_errors + root_warnings  # a missing root is fatal here
@@ -192,8 +192,8 @@ def load_apply_config(path=None) -> dict:
 
 # --- plan format -------------------------------------------------------------------------------
 
-_ITEM_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
-_KIND = re.compile(r"^[a-z][a-z0-9_-]{0,31}$")
+_ITEM_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}")
+_KIND = re.compile(r"[a-z][a-z0-9_-]{0,31}")
 STATUSES = ("ready", "needs_review", "skipped")
 LEVELS = ("info", "warn", "error")
 OP_FIELDS = {  # op -> (required, optional)
@@ -227,6 +227,8 @@ def parse_json(text: str, what: str = "plan") -> dict:
                          parse_constant=_no_constant)
     except json.JSONDecodeError as exc:
         raise ReadError(f"{what} is not valid JSON: {exc}") from None
+    except (ValueError, RecursionError) as exc:  # e.g. a 5000-digit number, or nesting too deep
+        raise PlanError(f"{what} is not acceptable JSON: {exc}") from None
     if not isinstance(doc, dict):
         raise PlanError(f"{what} must be a JSON object")
     return doc
@@ -242,6 +244,10 @@ def split_ref(ref) -> tuple[str, str]:
         raise PlanError("path must be a string")
     if "\x00" in ref:
         raise PlanError(f"{ref!r}: contains NUL")
+    try:
+        os.fsencode(ref)
+    except UnicodeError:
+        raise PlanError(f"{ref!r}: not a valid file name (bad surrogate)") from None
     if ":" not in ref:
         raise PlanError(f"{ref!r}: not a root:path reference")
     root, rel = ref.split(":", 1)
@@ -279,7 +285,7 @@ def _in_trash(root: str, rel: str) -> bool:
 
 
 def _check_op(op, where: str, errors: list) -> None:
-    if not isinstance(op, dict) or op.get("op") not in OP_FIELDS:
+    if not isinstance(op, dict) or not isinstance(op.get("op"), str) or op["op"] not in OP_FIELDS:
         errors.append(f"{where}: unknown op {op.get('op') if isinstance(op, dict) else op!r}")
         return
     kind = op["op"]
@@ -343,14 +349,14 @@ def validate_plan(doc: dict) -> None:
         where = f"item {i}"
         if not _fields(item, {"id", "kind", "status", "ops"}, {"source", "findings"}, where, errors):
             continue
-        if not isinstance(item["id"], str) or not _ITEM_ID.match(item["id"]):
+        if not isinstance(item["id"], str) or not _ITEM_ID.fullmatch(item["id"]):
             errors.append(f"{where}: bad id {item['id']!r} (letters, digits, . _ -)")
             continue
         where = f"item {item['id']!r}"
         if item["id"] in seen_ids:
             errors.append(f"duplicate item id {item['id']!r}")
         seen_ids.add(item["id"])
-        if not isinstance(item["kind"], str) or not _KIND.match(item["kind"]):
+        if not isinstance(item["kind"], str) or not _KIND.fullmatch(item["kind"]):
             errors.append(f"{where}: bad kind {item['kind']!r} (a lowercase word)")
         if item["status"] not in STATUSES:
             errors.append(f"{where}: status must be one of {', '.join(STATUSES)}")
@@ -411,11 +417,16 @@ def _check_whole_plan(items: list, errors: list) -> None:
         errors.append(f"{ref}: is the destination of one op and the source of another op")
 
 
-def plan_id(doc: dict) -> str:
-    """12 hex chars of sha256 over canonical JSON of [id, status, ops] per item."""
+def plan_hash(doc: dict) -> str:
+    """sha256 (hex) over canonical JSON of [id, status, ops] per item."""
     canon = [[item["id"], item["status"], item["ops"]] for item in doc["items"]]
     data = json.dumps(canon, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
-    return hashlib.sha256(data.encode("ascii")).hexdigest()[:12]
+    return hashlib.sha256(data.encode("ascii")).hexdigest()
+
+
+def plan_id(doc: dict) -> str:
+    """The short plan id: the first 12 hex chars of plan_hash()."""
+    return plan_hash(doc)[:12]
 
 
 # --- path guard ---------------------------------------------------------------------------------
@@ -445,6 +456,70 @@ class Guard:
 
     def ref(self, root: str, full: str) -> str:
         return f"{root}:{os.path.relpath(full, self.roots[root])}"
+
+    def root_of(self, full: str) -> str:
+        for name, base in self.roots.items():
+            if os.path.commonpath([base, full]) == base and full != base:
+                return name
+        raise Refusal(f"{full}: not under a root")
+
+
+_DIR_NOFOLLOW = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
+
+
+class At:
+    """A path's parent folder, opened from its root one level at a time without following
+    symlinks. Every change is made relative to it, so a folder swapped for a symlink after the
+    checks cannot redirect the change outside the root."""
+
+    def __init__(self, guard: Guard, full: str):
+        root = guard.root_of(full)
+        self.ref = guard.ref(root, full)
+        parts = os.path.relpath(full, guard.roots[root]).split(os.sep)
+        self.name = parts[-1]
+        self.fd = os.open(guard.roots[root], os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC)
+        try:
+            for part in parts[:-1]:
+                fd = os.open(part, _DIR_NOFOLLOW, dir_fd=self.fd)
+                os.close(self.fd)
+                self.fd = fd
+        except OSError as exc:
+            os.close(self.fd)
+            if exc.errno in (errno.ELOOP, errno.ENOTDIR):
+                raise Refusal(f"{self.ref}: a parent folder is now a symlink (never followed)") from None
+            raise
+
+    def __enter__(self) -> "At":
+        return self
+
+    def __exit__(self, *exc) -> None:
+        os.close(self.fd)
+
+    def lstat(self):
+        try:
+            return os.stat(self.name, dir_fd=self.fd, follow_symlinks=False)
+        except FileNotFoundError:
+            return None
+
+    def check_file(self, op: dict) -> None:
+        """Right before the change: still a regular file with the planned size and mtime."""
+        st = self.lstat()
+        if st is None or not stat.S_ISREG(st.st_mode):
+            raise Refusal(f"{self.ref}: no longer a regular file")
+        if (st.st_size, st.st_mtime_ns // 10**9) != (op["size"], op["mtime"]):
+            raise Refusal(f"{self.ref}: changed since it was checked")
+
+
+def _rename(guard: Guard, src: str, dst: str) -> None:
+    with At(guard, src) as a, At(guard, dst) as b:
+        if b.lstat() is not None:
+            raise Refusal(f"{b.ref}: destination exists (never overwritten)")
+        os.rename(a.name, b.name, src_dir_fd=a.fd, dst_dir_fd=b.fd)  # see SAFETY.md for the tiny race
+
+
+def _rmdir(guard: Guard, path: str) -> None:
+    with At(guard, path) as at:
+        os.rmdir(at.name, dir_fd=at.fd)
 
 
 # --- filesystem view ----------------------------------------------------------------------------
@@ -550,7 +625,7 @@ class Journal:
         self.path, self.header = path, header
 
     def __enter__(self):
-        if os.path.lexists(self.path):
+        if _check_journal_file(self.path):
             first = _read_journal(self.path)[0]
             if first.get("plan_id") != self.header["plan_id"]:
                 raise Refusal(f"{self.path} belongs to another plan ({first.get('plan_id')}); move it away")
@@ -568,6 +643,21 @@ class Journal:
 
     def __exit__(self, *exc):
         self.fh.close()
+
+
+def _check_journal_file(path: str) -> bool:
+    """True if a journal exists; refuse one that this user did not write (it could be planted)."""
+    try:
+        st = os.lstat(path)
+    except FileNotFoundError:
+        return False
+    if not stat.S_ISREG(st.st_mode):
+        raise Refusal(f"{path}: journal is not a regular file")
+    if st.st_uid != os.geteuid():
+        raise Refusal(f"{path}: journal belongs to another user; move it away")
+    if st.st_mode & 0o022:
+        raise Refusal(f"{path}: journal is writable by others; move it away")
+    return True
 
 
 def _read_journal(path: str) -> list[dict]:
@@ -604,6 +694,7 @@ class Executor:
         self.journal: Journal | None = None
         self.warned_owner = False
         self.prefix = ""  # "undo_" while undoing, so a later undo does not read these as plan moves
+        self.io_error = False  # an OSError (not a refusal) happened: exit 1
 
     def log(self, entry: dict) -> None:
         if self.journal is not None:
@@ -612,7 +703,11 @@ class Executor:
     def run_op(self, view: View, op: dict, ctx: Ctx) -> str:
         """Check one op against the view and (in real mode) perform it. Returns 'done' if the
         filesystem already shows it done, else 'change'. Raises Refusal / OSError."""
-        return getattr(self, "op_" + op["op"])(view, op, ctx)
+        try:
+            return getattr(self, "op_" + op["op"])(view, op, ctx)
+        except OSError as exc:  # changes use names relative to an open folder: report plan refs
+            where = op["path"] if "path" in op else f"{op['from']} -> {op['to']}"
+            raise OSError(exc.errno, f"{where}: {exc.strerror}") from None
 
     def op_mkdir(self, view: View, op: dict, ctx: Ctx) -> str:
         ref = op["path"]
@@ -635,9 +730,10 @@ class Executor:
             if view.dry:
                 view.add(level, ("dir", 0, 0, found[3]))
             else:
-                os.mkdir(level)
-                ctx.created.append((level, level_ref))
                 self.log({"t": "mkdir", "item": ctx.id, "path": level_ref})
+                with At(self.guard, level) as at:
+                    os.mkdir(at.name, dir_fd=at.fd)
+                ctx.created.append((level, level_ref))
         return "change"
 
     def op_move(self, view: View, op: dict, ctx: Ctx) -> str:
@@ -662,7 +758,9 @@ class Executor:
             return "change"
         self.log({"t": "begin", "item": ctx.id, "n": ctx.n, "op": op})
         try:
-            os.rename(src, dst)  # lexists was checked just above; see SAFETY.md for the tiny race
+            with At(self.guard, src) as at:
+                at.check_file(op)
+            _rename(self.guard, src, dst)
         except OSError as exc:
             if exc.errno == errno.EXDEV:
                 raise Refusal(f"{src_ref} -> {dst_ref}: different filesystem (moves never copy)") from None
@@ -692,7 +790,12 @@ class Executor:
             view.remove(full)
             return "change"
         self.log({"t": "begin", "item": ctx.id, "n": ctx.n, "op": op})
-        (os.rmdir if op.get("dir") else os.unlink)(full)
+        with At(self.guard, full) as at:
+            if op.get("dir"):
+                os.rmdir(at.name, dir_fd=at.fd)
+            else:
+                at.check_file(op)
+                os.unlink(at.name, dir_fd=at.fd)
         self.log({"t": "done", "item": ctx.id, "n": ctx.n, "op": op})
         return "change"
 
@@ -715,17 +818,29 @@ class Executor:
                     and self.uid in (None, st.st_uid) and self.gid in (None, st.st_gid))
             return "done" if same else "change"
         self.log({"t": "begin", "item": ctx.id, "n": ctx.n, "op": op})
-        if mode is not None:
-            os.chmod(full, mode)
-        if self.uid is not None or self.gid is not None:
-            if os.geteuid() != 0:
-                if not self.warned_owner:
-                    self.out.warn("not privileged: ownership left unchanged (modes were applied)")
-                    self.warned_owner = True
-            else:
-                uid = -1 if self.uid is None else self.uid
-                gid = -1 if self.gid is None else self.gid
-                os.chown(full, uid, gid, follow_symlinks=False)
+        with At(self.guard, full) as at:
+            try:  # O_NONBLOCK: a FIFO swapped in cannot hang the open
+                fd = os.open(at.name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC, dir_fd=at.fd)
+            except OSError as exc:
+                if exc.errno == errno.ELOOP:
+                    raise Refusal(f"{ref}: is now a symlink (never followed)") from None
+                raise
+        try:
+            st = os.fstat(fd)
+            if not (stat.S_ISREG(st.st_mode) or stat.S_ISDIR(st.st_mode)):
+                raise Refusal(f"{ref}: symlink or special file")
+            mode = self.dir_mode if stat.S_ISDIR(st.st_mode) else self.file_mode
+            if mode is not None:
+                os.fchmod(fd, mode)
+            if self.uid is not None or self.gid is not None:
+                if os.geteuid() != 0:
+                    if not self.warned_owner:
+                        self.out.warn("not privileged: ownership left unchanged (modes were applied)")
+                        self.warned_owner = True
+                else:
+                    os.fchown(fd, -1 if self.uid is None else self.uid, -1 if self.gid is None else self.gid)
+        finally:
+            os.close(fd)
         self.log({"t": "done", "item": ctx.id, "n": ctx.n, "op": op})
         return "change"
 
@@ -739,6 +854,7 @@ class Executor:
                     states.append(self.run_op(fork, op, ctx))
             except (Refusal, PlanError, OSError) as exc:
                 error = str(exc)
+                self.io_error = self.io_error or isinstance(exc, OSError)
             else:
                 view.adopt(fork)
             states += ["?"] * (len(item["ops"]) - len(states))
@@ -756,6 +872,7 @@ class Executor:
                 deleting = deleting or op["op"] == "delete"
                 self.run_op(real, op, ctx)
         except (Refusal, PlanError, OSError) as exc:
+            self.io_error = self.io_error or isinstance(exc, OSError)
             if deleting:
                 self.log({"t": "item", "item": ctx.id, "result": "partial"})
                 return "partial", f"{exc}; item partial (deletes had started, nothing rolled back)"
@@ -774,7 +891,7 @@ class Executor:
                 src, dst = self.guard.path(op["from"]), self.guard.path(op["to"])
                 d = real.info(dst)
                 if real.info(src) is None and d and d[0] == "file" and d[1:3] == (op["size"], op["mtime"]):
-                    os.rename(dst, src)
+                    _rename(self.guard, dst, src)
                     self.log({"t": "rollback", "item": ctx.id, "op": op, "result": "ok"})
                     continue
                 problems.append(f"{op['to']} not rolled back (changed since it was moved)")
@@ -785,10 +902,10 @@ class Executor:
             found = real.info(path)
             if found and found[0] == "dir" and real.is_empty_dir(path):
                 try:
-                    os.rmdir(path)
+                    _rmdir(self.guard, path)
                     self.log({"t": "rollback", "item": ctx.id, "rmdir": ref, "result": "ok"})
-                except OSError as exc:
-                    problems.append(f"{ref} not removed ({exc.strerror})")
+                except (Refusal, OSError) as exc:
+                    problems.append(f"{ref} not removed ({getattr(exc, 'strerror', None) or exc})")
         return problems
 
 
@@ -854,10 +971,13 @@ def _confirm(args, pid: str, from_stdin: bool, what: str = "execute") -> None:
 
 
 def _seconds(duration: str) -> int:
-    m = _DURATION.match(duration)
+    m = _DURATION.fullmatch(duration)
     if not m:
         raise ConfigError(f"--max-age: must be a duration like 30m, 24h, 7d (got {duration!r})")
     return int(m[1]) * {"s": 1, "m": 60, "h": 3600, "d": 86400}[m[2]]
+
+
+FUTURE_SLACK = 300  # seconds of clock difference allowed between the two machines
 
 
 def _check_age(doc: dict, max_age: str) -> None:
@@ -871,6 +991,8 @@ def _check_age(doc: dict, max_age: str) -> None:
     if when is None or when.tzinfo is None:
         raise Refusal("plan has no valid 'created' time, so its age cannot be checked (max_age)")
     age = (datetime.datetime.now(datetime.timezone.utc) - when).total_seconds()
+    if age < -FUTURE_SLACK:
+        raise Refusal("plan 'created' time is in the future, so its age cannot be trusted (max_age)")
     if age > limit:
         raise Refusal(f"plan is {int(age // 60)} minutes old, older than max_age {max_age}")
 
@@ -909,20 +1031,28 @@ def _select(items: list, only, skip) -> list:
     return [it for it in items if (not only or it["id"] in only) and it["id"] not in (skip or [])]
 
 
+def _load_plan(text: str, args) -> tuple[dict, str, str]:
+    doc = parse_plan(text)
+    try:
+        validate_plan(doc)
+    except (TypeError, ValueError, RecursionError) as exc:  # belt and braces for hostile input
+        raise PlanError(f"plan is malformed: {exc}") from None
+    full_hash = plan_hash(doc)
+    if args.approve is not None and not (len(args.approve) >= 12 and full_hash.startswith(args.approve)):
+        raise Refusal(f"plan id {full_hash[:12]} does not match --approve {args.approve}")
+    return doc, full_hash[:12], full_hash
+
+
 def cmd_apply(args, cfg: dict, out: Out) -> int:
     if args.plan is None:
         raise ReadError("no plan given (use - to read it from stdin)")
     text, plan_path, plan_size, plan_mtime = _read_plan(args.plan)
-    doc = parse_plan(text)
-    validate_plan(doc)
-    pid = plan_id(doc)
-    if args.approve is not None and args.approve != pid:
-        raise Refusal(f"plan id {pid} does not match --approve {args.approve}")
+    doc, pid, full_hash = _load_plan(text, args)
     if args.execute and cfg["safety"]["require_approve"] and args.approve is None:
         raise Refusal("config requires --approve PLAN_ID with --execute")
-    max_age = args.max_age or cfg["safety"]["max_age"]
-    if max_age:
-        _check_age(doc, max_age)
+    limits = [m for m in (args.max_age, cfg["safety"]["max_age"]) if m]
+    if limits:
+        _check_age(doc, min(limits, key=_seconds))  # the stricter of --max-age and the config
     items = _select(doc["items"], args.only, args.skip)
     journal_path = _journal_path(plan_path, pid)
     lock_path = os.path.join(cfg["_roots"]["source"], LOCK_NAME)
@@ -964,44 +1094,80 @@ def cmd_apply(args, cfg: dict, out: Out) -> int:
         errors.append("nothing was changed")
     for msg in errors:
         out.error(msg)
-    code = (EXIT_REFUSED if errors else EXIT_REVIEW if review
+    code = (EXIT_ERROR if ex.io_error else EXIT_REFUSED if errors else EXIT_REVIEW if review
             else EXIT_CHANGES if todo and not args.execute else EXIT_OK)
     out.info()
     if not args.execute:
-        out.info(f"dry-run: nothing was changed. Plan id {pid}. To apply: tidyshelf-apply PLAN --execute")
+        out.info(f"dry-run: nothing was changed. Plan id {pid} (sha256 {full_hash}).")
+        out.info("To apply: tidyshelf-apply PLAN --execute (--approve takes the id or a longer prefix)")
     elif not errors:
         out.info(f"applied plan {pid}: {sum(1 for r in results.values() if r == 'ok')} items changed")
-    out.doc({"plan_id": pid, "mode": mode, "exit": code, "errors": errors,
+    out.doc({"plan_id": pid, "plan_hash": full_hash, "mode": mode, "exit": code, "errors": errors,
              "items": [{"id": it["id"], "status": it["status"], "result": results.get(it["id"], it["status"]),
                         "ops": [dict(op, state=pre[it["id"]]["states"][n]) if it["id"] in pre else op
                                 for n, op in enumerate(it["ops"])]} for it in items]})
     return code
 
 
-def cmd_undo(args, cfg: dict, out: Out) -> int:
-    """Reverse the moves recorded in a journal. Deletes are never undone. All or nothing."""
-    journal_path = os.path.realpath(args.undo)
-    entries = _read_journal(journal_path)
-    pid = entries[0]["plan_id"]
+def _undo_records(doc: dict, entries: list) -> tuple[list[dict], list[str]]:
+    """The moves and created folders in a journal, each checked against the plan: a journal line
+    for an op the plan does not have is refused, so a planted journal cannot steer undo."""
+    ops = {(it["id"], n): op for it in doc["items"] for n, op in enumerate(it["ops"])}
+    allowed_dirs: dict[str, set] = {}
+    for it in doc["items"]:
+        for op in it["ops"]:
+            if op["op"] == "mkdir":
+                root, rel = split_ref(op["path"])
+                parts = rel.split("/")
+                allowed_dirs.setdefault(it["id"], set()).update(
+                    f"{root}:{'/'.join(parts[:i])}" for i in range(1, len(parts) + 1))
     moves: dict[tuple, dict] = {}
     created: list[str] = []
-    for e in entries:
-        op = e.get("op")
-        if e.get("t") in ("begin", "done") and isinstance(op, dict) and op.get("op") == "move":
+    for e in entries[1:]:
+        t, item = e.get("t"), e.get("item")
+        if t in ("begin", "done", "mkdir") and not isinstance(item, str):
+            raise PlanError("journal: a line has no valid 'item'")
+        if t in ("begin", "done"):
+            op = e.get("op")
+            if type(e.get("n")) is not int or not isinstance(op, dict):
+                raise PlanError("journal: a begin/done line has no valid 'n' or 'op'")
+            if op.get("op") != "move":
+                continue
             problems: list[str] = []
             _check_op(op, "journal", problems)
             if problems:
                 raise PlanError("\n".join(problems))
-            key = (e.get("item"), e.get("n"))
-            if moves.setdefault(key, op) != op:
-                raise PlanError(f"journal entries for {key} disagree")
-        elif e.get("t") == "mkdir":
+            if ops.get((item, e["n"])) != op:
+                raise Refusal(f"journal move {op['from']} -> {op['to']} is not in the plan")
+            moves[(item, e["n"])] = op
+        elif t == "mkdir":
             split_ref(e.get("path"))
-            created.append(e["path"])
+            if e["path"] not in allowed_dirs.get(item, ()):
+                raise Refusal(f"journal mkdir {e['path']} is not in the plan")
+            if e["path"] not in created:
+                created.append(e["path"])
+    return list(moves.values()), created
+
+
+def cmd_undo(args, cfg: dict, out: Out) -> int:
+    """Reverse the moves a run of this plan recorded in its journal. Deletes are never undone."""
+    if args.plan is None:
+        raise ReadError("--undo needs the plan (its journal is found next to it)")
+    if args.plan.endswith(".journal.jsonl"):
+        raise ReadError("--undo takes the plan file, not the journal (the journal is found next to it)")
+    text, plan_path, _size, _mtime = _read_plan(args.plan)
+    doc, pid, _hash = _load_plan(text, args)
+    journal_path = _journal_path(plan_path, pid)
+    if not _check_journal_file(journal_path):
+        raise ReadError(f"{journal_path}: no journal for this plan")
+    entries = _read_journal(journal_path)
+    if entries[0]["plan_id"] != pid:
+        raise Refusal(f"{journal_path} belongs to another plan ({entries[0]['plan_id']})")
+    moves, created = _undo_records(doc, entries)
     lock_path = os.path.join(cfg["_roots"]["source"], LOCK_NAME)
-    guard = Guard(cfg, [lock_path, journal_path])
+    guard = Guard(cfg, [lock_path, journal_path] + ([plan_path] if plan_path else []))
     view, todo, problems = View(dry=True), [], []
-    for op in reversed(list(moves.values())):
+    for op in reversed(moves):
         src, dst = guard.path(op["from"]), guard.path(op["to"])
         s, d = view.info(src), view.info(dst)
         if s is None and d and d[0] == "file" and d[1:3] == (op["size"], op["mtime"]):
@@ -1018,39 +1184,49 @@ def cmd_undo(args, cfg: dict, out: Out) -> int:
             problems.append(f"{op['to']}: changed or missing since it was moved; cannot undo")
     for ref in created:
         guard.path(ref)
-    out.info(f"undo plan {pid}: {len(todo)} moves to reverse, {'execute' if args.execute else 'dry-run'}")
+    mode = "execute" if args.execute else "dry-run"
+    out.info(f"undo plan {pid}: {len(todo)} moves to reverse, {mode}")
     for op in todo:
         out.info(f"  move     {op['to']}\n             -> {op['from']}")
+    code, done = EXIT_OK, 0
     if problems:
-        for msg in problems:
-            out.error(msg)
-        out.error("nothing was undone")
-        return EXIT_REFUSED
-    if not args.execute:
-        return EXIT_CHANGES if todo else EXIT_OK
-    if todo:
-        _confirm(args, pid, False, "undo")
-    ex = Executor(cfg, guard, out)
-    ex.prefix = "undo_"
-    with Lock(lock_path):
-        ex.journal = Journal(journal_path, {"t": "undo_header", "plan_id": pid}).__enter__()
-        try:
-            for op in todo:
-                root = op["from"].split(":", 1)[0]
-                parent = os.path.dirname(guard.path(op["from"]))
-                if parent != cfg["_roots"][root]:
-                    ex.op_mkdir(View(dry=False), {"op": "mkdir", "path": guard.ref(root, parent)}, Ctx("undo"))
-                ex.op_move(View(dry=False), {**op, "from": op["to"], "to": op["from"]}, Ctx("undo"))
-            for ref in reversed(created):
-                path, real = guard.path(ref), View(dry=False)
-                found = real.info(path)
-                if found and found[0] == "dir" and real.is_empty_dir(path):
-                    os.rmdir(path)
-                    ex.log({"t": "rmdir", "path": ref})
-        finally:
-            ex.journal.__exit__()
-    out.info(f"undone: {len(todo)} moves reversed")
-    return EXIT_OK
+        problems.append("nothing was undone")
+        code = EXIT_REFUSED
+    elif not args.execute:
+        code = EXIT_CHANGES if todo else EXIT_OK
+    else:
+        if todo:
+            _confirm(args, pid, plan_path is None, "undo")
+        ex = Executor(cfg, guard, out)
+        ex.prefix = "undo_"
+        with Lock(lock_path), Journal(journal_path, {"t": "undo_header", "plan_id": pid}) as journal:
+            ex.journal = journal
+            try:
+                for op in todo:
+                    root = op["from"].split(":", 1)[0]
+                    parent = os.path.dirname(guard.path(op["from"]))
+                    if parent != cfg["_roots"][root]:
+                        ex.op_mkdir(View(dry=False), {"op": "mkdir", "path": guard.ref(root, parent)}, Ctx("undo"))
+                    ex.op_move(View(dry=False), {**op, "from": op["to"], "to": op["from"]}, Ctx("undo"))
+                    done += 1
+                for ref in reversed(created):
+                    path, real = guard.path(ref), View(dry=False)
+                    found = real.info(path)
+                    if found and found[0] == "dir" and real.is_empty_dir(path):
+                        _rmdir(guard, path)
+                        ex.log({"t": "rmdir", "path": ref})
+            except (Refusal, OSError) as exc:
+                ex.log({"t": "item", "item": "undo", "result": "partial"})
+                problems.append(f"undo partial: {done} of {len(todo)} moves reversed ({exc}); "
+                                "run --undo again to retry")
+                code = EXIT_ERROR if isinstance(exc, OSError) else EXIT_REFUSED
+        if not problems:
+            out.info(f"undone: {done} moves reversed")
+    for msg in problems:
+        out.error(msg)
+    out.doc({"plan_id": pid, "mode": mode, "exit": code, "errors": problems,
+             "moves": [{"from": op["to"], "to": op["from"]} for op in todo]})
+    return code
 
 
 class _Parser(argparse.ArgumentParser):
@@ -1073,7 +1249,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--on-error", choices=("stop", "continue"), default="stop",
                    help="stop: run nothing if any item fails pre-flight (default); continue: skip it")
     p.add_argument("--config", metavar="FILE", help="config file (default: $TIDYSHELF_CONFIG, usual places)")
-    p.add_argument("--undo", metavar="JOURNAL", help="reverse the moves recorded in a journal")
+    p.add_argument("--undo", action="store_true",
+                   help="reverse the moves a run of PLAN made (read from the journal next to it)")
     p.add_argument("--json", action="store_true", help="machine-readable output")
     p.add_argument("--quiet", action="store_true", help="only print errors")
     p.add_argument("--no-color", action="store_true", help="no colour (output has none anyway)")
