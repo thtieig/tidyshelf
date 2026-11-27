@@ -4,76 +4,13 @@ from __future__ import annotations
 
 import os
 import re
-import stat
-from dataclasses import dataclass, field
 
-from tidyshelf import parse, subtitles
+from tidyshelf import parse
+from tidyshelf.itemops import (PlanState, Planned, _finish, _real, _video_bytes, analyse_subs, dropped_junk,
+                               emit_ops)
 from tidyshelf.naming import MOVIE_FOLDER_RE, movie_names, safe_name, subtitle_stem
-from tidyshelf.plan import Item, Plan, file_stat, trash_ref
+from tidyshelf.plan import Item, Plan, file_stat
 from tidyshelf.scan import Candidate, library_index, scan_source
-
-REVIEW_CODES = {
-    "no title found": "parse.no_title",
-    "no year found": "parse.no_year",
-    "several videos": "movie.several_videos",
-    "title has no usable characters": "name.unusable",
-    "several subtitles with no recognisable language": "subtitle.unknown_language",
-}
-
-
-@dataclass
-class PlanState:
-    """What earlier items of the same plan already took."""
-    library: dict[str, str]
-    claimed: dict[str, str] = field(default_factory=dict)  # library key -> source ref
-    trash_used: set[str] = field(default_factory=set)
-
-
-@dataclass
-class Planned:
-    item: Item
-    trace: list[str]
-
-
-def _real(cfg: dict, ref: str) -> str:
-    root, rel = ref.split(":", 1)
-    return os.path.join(cfg["roots"][root], rel)
-
-
-def _video_bytes(cfg: dict, lib_ref: str) -> int:
-    folder, total = _real(cfg, lib_ref), 0
-    if not stat.S_ISDIR(os.lstat(folder).st_mode):
-        return 0
-    videos = {e.lower() for e in cfg["video"]["extensions"]}
-    for name in sorted(os.listdir(folder)):
-        st = os.lstat(os.path.join(folder, name))
-        if os.path.splitext(name)[1].lower() in videos and not os.path.islink(os.path.join(folder, name)):
-            total += st.st_size
-    return total
-
-
-def _trash_target(cfg: dict, ref: str, state: PlanState) -> str:
-    target = trash_ref(ref)
-    stem, ext = os.path.splitext(target)
-    n = 0
-    while target in state.trash_used or os.path.lexists(_real(cfg, target)):
-        n += 1
-        target = f"{stem}.{n}{ext}"
-    state.trash_used.add(target)
-    return target
-
-
-def _finish(item: Item, findings: list, status: str | None = None, review: str | None = None,
-            code: str | None = None) -> Item:
-    for level, c, msg in findings:
-        item.finding(level, c, msg)
-    if review is not None:
-        item.finding("warn", code or REVIEW_CODES.get(review, "review"), review)
-        item.status = "needs_review"
-    elif status is not None:
-        item.status = status
-    return item
-
 
 def plan_candidate(cand: Candidate, cfg: dict, state: PlanState) -> Planned:
     """One item for one candidate. Its id is set by build_plan()."""
@@ -137,17 +74,8 @@ def plan_candidate(cand: Candidate, cfg: dict, state: PlanState) -> Planned:
 
     # Subtitles.
     base_dir = cand.path if cand.is_dir else os.path.dirname(cand.path)
-    rel_of = lambda ref: os.path.relpath(_real(cfg, ref), base_dir)  # noqa: E731
-    infos = [subtitles.analyse(_real(cfg, ref), ref, cfg) for ref in cand.subs]
-    choice = subtitles.choose(infos, cfg, rel_of)
+    choice = analyse_subs(cand.subs, cfg, base_dir, trace)
     findings += choice.findings
-    kept_refs = {s.ref: (lang, variant) for s, lang, variant in choice.keep}
-    for s in infos:
-        det = s.detection
-        seen = f"detected={det.lang} ({det.confidence:.2f}, {det.encoding})" if det else "image subtitle"
-        outcome = (f"keep as {'/'.join(x for x in kept_refs[s.ref] if x)}" if s.ref in kept_refs
-                   else next((f"drop ({why})" for d, why in choice.drop if d.ref == s.ref), "moves with its .idx"))
-        trace.append(f"subtitle {rel_of(s.ref)}: claimed={s.claimed} {seen} variant={s.variant} -> {outcome}")
     if choice.review:
         return Planned(_finish(item, findings + left, review=choice.review), trace)
 
@@ -164,33 +92,9 @@ def plan_candidate(cand: Candidate, cfg: dict, state: PlanState) -> Planned:
     if len(set(targets)) != len(targets):
         return Planned(_finish(item, findings + left, review="two subtitles would get the same name",
                                code="subtitle.collision"), trace)
-    junk = [(ref, "junk") for ref in cand.junk]
-    for s, why in choice.drop:
-        junk.append((s.ref, f"subtitle {why}"))
-        if s.pair and why != "orphan":
-            junk.append((s.pair, f"subtitle {why}"))
-    junk.sort()
-    trash = cfg["junk"]["junk_action"] == "trash"
-    trash_moves = [(ref, _trash_target(cfg, ref, state)) for ref, _why in junk] if trash else []
+    junk = [(ref, "junk") for ref in cand.junk] + dropped_junk(choice)
     created = [lib] + ([subs_dir] if choice.keep else [])
-    item.mkdir(created[-1])
-    parents = sorted({to.rsplit("/", 1)[0] for _f, to in trash_moves})
-    for parent in parents:
-        if not any(other.startswith(parent + "/") for other in parents):
-            item.mkdir(parent)
-    for src, dst in moves + trash_moves:
-        item.move(src, dst, *file_stat(_real(cfg, src)))
-        trace.append(f"move {src.split(':', 1)[1]} -> {dst}")
-    for path in created + targets:
-        item.set_mode(path)
-    if not trash:
-        for ref, why in junk:
-            item.delete_file(ref, *file_stat(_real(cfg, ref)), reason=why)
-    left_refs = [r for r, _why in cand.left]
-    if cand.is_dir:
-        for d in cand.dirs + [cand.ref]:
-            if not any(r == d or r.startswith(d + "/") for r in left_refs):
-                item.delete_dir(d, reason="empty")
+    emit_ops(item, cand, cfg, state, moves, junk, created, trace)
     state.claimed[key] = cand.ref
     return Planned(_finish(item, findings + left), trace)
 
