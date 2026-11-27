@@ -144,3 +144,16 @@ def test_undecodable_names_print_without_crashing(lib, capsys):
         code, out, err = run(lib, capsys, *argv)
         assert code in (0, 2), (argv, err)
         assert "Traceback" not in err
+
+
+def test_series_plan_then_apply_end_to_end(lib, capsys, tmp_path):
+    lib.tree("source", "Harbour.Lights.S01.720p/Harbour.Lights.S01E01.Pilot.mkv [10]\n"
+                       "Harbour.Lights.S01.720p/Harbour.Lights.S01E02.mkv [10]\nHarbour.Lights.S01.720p/x.nfo")
+    target = tmp_path / "plan.json"
+    assert run(lib, capsys, "plan", "--out", str(target))[0] == 2
+    assert tidyshelf_apply.main([str(target), "--config", str(lib.config_path), "--execute", "--yes"]) == 0
+    capsys.readouterr()
+    season = lib.roots["series"] / "Harbour Lights" / "Season 1"
+    assert sorted(p.name for p in season.iterdir()) == ["S01E01 - Pilot.mkv", "S01E02.mkv"]
+    code, out, _err = run(lib, capsys, "plan")
+    assert code == 0 and "0 items" in out

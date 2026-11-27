@@ -1,6 +1,6 @@
 # Advanced configuration
 
-> Movies are covered. Series (M3), quality (M4), audit (M5) and running plan and apply on
+> Movies and series are covered. Quality (M4), audit (M5) and running plan and apply on
 > different machines (M6) are filled in as they land.
 
 Every setting, with its default and a comment, is in
@@ -78,6 +78,30 @@ ignore = true
 ```
 
 To keep a whole folder out of every plan, `[exclude] patterns` is the better tool.
+
+## How a series is read
+
+A season pack (`Show.S01.720p/`), a show folder (`Show/Season 2/`, `Show/Specials/`) or a loose
+episode file is one item. Each video needs an episode number; these styles are understood:
+`S01E02`, `1x02`, `102`, `Show - 06 - Title`, bare absolute numbers (`096`), and multi-episode
+files (`S01E23-E24`, `S03E16E17`, `1x08-09` all become `S01E23-E24`).
+
+- A file without a season takes the season of the folder it sits in (`Season 4`, `S04`, `Specials`
+  = 0), then the season in the item's folder name, then an `[[override]]` `season`, then 1. With
+  season 1 only assumed and more than 26 episodes, the item needs review.
+- Bare three-digit numbers: if any starts with `0` (`001`, `096`), the show counts as absolutely
+  numbered (season 1, episode 96); otherwise `102` means S01E02. A file far outside the numbering
+  and much smaller than the rest (`999` next to `001`–`104`) goes to `Season 00` and the item
+  needs review.
+- Markers like `S1M1`, `S1M2` are numbered E01, E02, ... in their order (reported).
+- Names: `Series/<Show>/Season <N>/S01E02 - Title.ext` (`[naming] season_folder`, `episode_file`,
+  `specials_folder`); the episode title is kept when the name has one. An existing show folder in
+  the library (also `Show (Year)`) is reused, so new episodes join it.
+- Subtitles go next to their episode (`S01E02 - Title.en.srt`). A subtitle belongs to the episode
+  with the same numbers in its name, or the video whose name it starts with; a subtitle that matches
+  no episode goes to the trash.
+- Two videos for one episode, a video without an episode number, or an episode the library already
+  has: the item needs review (with `[conflicts] on_exists = "skip"`, an existing episode skips it).
 
 ## Subtitles
 

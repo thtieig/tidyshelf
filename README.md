@@ -4,7 +4,7 @@ Tidy a folder of video files in any naming state into a library with one consist
 Kodi/Jellyfin/Plex/Emby-portable naming standard. No AI, no network, no cloud: the same input
 and the same config always give the same plan.
 
-> **Status:** early development. Movies can be planned and applied; series, quality checks and
+> **Status:** early development. Movies and series can be planned and applied; quality checks and
 > `--audit` are still to come.
 
 **It moves and can delete files.** Read the plan before applying it. Dry-run is the default.

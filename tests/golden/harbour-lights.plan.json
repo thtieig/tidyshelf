@@ -1,0 +1,191 @@
+{
+  "format": 1,
+  "tool": "tidyshelf 0.1.0.dev0",
+  "created": "2026-11-27T09:00:00Z",
+  "items": [
+    {
+      "id": "series-0001",
+      "kind": "series",
+      "status": "ready",
+      "source": "source:Harbour.Lights.S01.720p",
+      "findings": [
+        {
+          "level": "warn",
+          "code": "subtitle.ad_cues",
+          "msg": "Subs/Harbour.Lights.S01E02.eng.srt has advertising cues (reported, not removed): 'Subtitles by www.example.com'"
+        },
+        {
+          "level": "info",
+          "code": "scan.left",
+          "msg": "Harbour.Lights.S01.720p/Featurettes left untouched (extras folder)"
+        }
+      ],
+      "ops": [
+        {
+          "op": "mkdir",
+          "path": "series:Harbour Lights/Season 1"
+        },
+        {
+          "op": "mkdir",
+          "path": "source:.tidyshelf-trash/source/Harbour.Lights.S01.720p"
+        },
+        {
+          "op": "move",
+          "from": "source:Harbour.Lights.S01.720p/Harbour.Lights.S01E01.Pilot.720p.mkv",
+          "to": "series:Harbour Lights/Season 1/S01E01 - Pilot.mkv",
+          "size": 300,
+          "mtime": 1723000000
+        },
+        {
+          "op": "move",
+          "from": "source:Harbour.Lights.S01.720p/Harbour.Lights.S01E02.The.Storm.720p.mkv",
+          "to": "series:Harbour Lights/Season 1/S01E02 - The Storm.mkv",
+          "size": 300,
+          "mtime": 1723000000
+        },
+        {
+          "op": "move",
+          "from": "source:Harbour.Lights.S01.720p/Harbour.Lights.S01E03E04.Two.Parter.720p.mkv",
+          "to": "series:Harbour Lights/Season 1/S01E03-E04 - Two Parter.mkv",
+          "size": 600,
+          "mtime": 1723000000
+        },
+        {
+          "op": "move",
+          "from": "source:Harbour.Lights.S01.720p/Subs/Harbour.Lights.S01E01.eng.srt",
+          "to": "series:Harbour Lights/Season 1/S01E01 - Pilot.en.srt",
+          "size": 2650,
+          "mtime": 1723000000
+        },
+        {
+          "op": "move",
+          "from": "source:Harbour.Lights.S01.720p/Subs/Harbour.Lights.S01E02.eng.srt",
+          "to": "series:Harbour Lights/Season 1/S01E02 - The Storm.en.sdh.srt",
+          "size": 3215,
+          "mtime": 1723000000
+        },
+        {
+          "op": "move",
+          "from": "source:Harbour.Lights.S01.720p/Subs/Harbour.Lights.S01E02.spa.srt",
+          "to": "series:Harbour Lights/Season 1/S01E02 - The Storm.es.srt",
+          "size": 2652,
+          "mtime": 1723000000
+        },
+        {
+          "op": "move",
+          "from": "source:Harbour.Lights.S01.720p/info.nfo",
+          "to": "source:.tidyshelf-trash/source/Harbour.Lights.S01.720p/info.nfo",
+          "size": 20,
+          "mtime": 1723000000
+        },
+        {
+          "op": "set_mode",
+          "path": "series:Harbour Lights"
+        },
+        {
+          "op": "set_mode",
+          "path": "series:Harbour Lights/Season 1"
+        },
+        {
+          "op": "set_mode",
+          "path": "series:Harbour Lights/Season 1/S01E01 - Pilot.mkv"
+        },
+        {
+          "op": "set_mode",
+          "path": "series:Harbour Lights/Season 1/S01E02 - The Storm.mkv"
+        },
+        {
+          "op": "set_mode",
+          "path": "series:Harbour Lights/Season 1/S01E03-E04 - Two Parter.mkv"
+        },
+        {
+          "op": "set_mode",
+          "path": "series:Harbour Lights/Season 1/S01E01 - Pilot.en.srt"
+        },
+        {
+          "op": "set_mode",
+          "path": "series:Harbour Lights/Season 1/S01E02 - The Storm.en.sdh.srt"
+        },
+        {
+          "op": "set_mode",
+          "path": "series:Harbour Lights/Season 1/S01E02 - The Storm.es.srt"
+        },
+        {
+          "op": "delete",
+          "path": "source:Harbour.Lights.S01.720p/Subs",
+          "dir": true,
+          "reason": "empty"
+        }
+      ]
+    },
+    {
+      "id": "series-0002",
+      "kind": "series",
+      "status": "ready",
+      "source": "source:Old Coast",
+      "findings": [],
+      "ops": [
+        {
+          "op": "mkdir",
+          "path": "series:Old Coast/Season 00"
+        },
+        {
+          "op": "mkdir",
+          "path": "series:Old Coast/Season 2"
+        },
+        {
+          "op": "move",
+          "from": "source:Old Coast/Season 2/Old Coast - 2x03 - The Lighthouse.mkv",
+          "to": "series:Old Coast/Season 2/S02E03 - The Lighthouse.mkv",
+          "size": 200,
+          "mtime": 1723000000
+        },
+        {
+          "op": "move",
+          "from": "source:Old Coast/Specials/Old.Coast.S00E01.Christmas.mkv",
+          "to": "series:Old Coast/Season 00/S00E01 - Christmas.mkv",
+          "size": 100,
+          "mtime": 1723000000
+        },
+        {
+          "op": "set_mode",
+          "path": "series:Old Coast"
+        },
+        {
+          "op": "set_mode",
+          "path": "series:Old Coast/Season 00"
+        },
+        {
+          "op": "set_mode",
+          "path": "series:Old Coast/Season 2"
+        },
+        {
+          "op": "set_mode",
+          "path": "series:Old Coast/Season 2/S02E03 - The Lighthouse.mkv"
+        },
+        {
+          "op": "set_mode",
+          "path": "series:Old Coast/Season 00/S00E01 - Christmas.mkv"
+        },
+        {
+          "op": "delete",
+          "path": "source:Old Coast/Season 2",
+          "dir": true,
+          "reason": "empty"
+        },
+        {
+          "op": "delete",
+          "path": "source:Old Coast/Specials",
+          "dir": true,
+          "reason": "empty"
+        },
+        {
+          "op": "delete",
+          "path": "source:Old Coast",
+          "dir": true,
+          "reason": "empty"
+        }
+      ]
+    }
+  ]
+}
