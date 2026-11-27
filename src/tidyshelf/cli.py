@@ -79,6 +79,7 @@ def build_parser() -> argparse.ArgumentParser:
     _common(p_plan, top=False)
     p_plan.add_argument("paths", nargs="*", metavar="PATH", help="what to plan (default: the whole source root)")
     p_plan.add_argument("--out", metavar="FILE", help="write the plan to FILE, or - for stdout")
+    p_plan.add_argument("--deep", action="store_true", help="also decode every video to find damaged files (slow)")
 
     p_explain = sub.add_parser("explain", help="show why one item is planned the way it is")
     _common(p_explain, top=False)
@@ -190,10 +191,12 @@ def cmd_plan(args, out: _Out) -> int:
                 out.error(f"--out {args.out}: is inside roots.{name}; write the plan somewhere else")
                 return 1
     try:
-        plan, _traces = movies.build_plan(cfg, args.paths or None)
+        plan, _traces = movies.build_plan(cfg, args.paths or None, deep=args.deep)
     except ValueError as exc:
         out.error(str(exc))
         return 1
+    for msg in plan.warnings:
+        out.warn(msg)
     doc = plan.to_dict()
     pid, code = plan.plan_id, _exit_code(doc["items"])
     if args.out == "-":
@@ -221,6 +224,8 @@ def cmd_explain(args, out: _Out) -> int:
     except ValueError as exc:
         out.error(str(exc))
         return 1
+    for msg in plan.warnings:
+        out.warn(msg)
     (item,) = plan.to_dict()["items"]
     trace = traces[item["id"]]
     if args.json:

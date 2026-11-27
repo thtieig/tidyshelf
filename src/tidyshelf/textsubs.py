@@ -97,6 +97,19 @@ def detect(data: bytes, ext: str, wordlists: dict) -> Detection:
     return Detection(lang, round(hits / any_hits, 2), any_hits, enc)
 
 
+_TIME = re.compile(r"(\d{1,2}):(\d{2}):(\d{2})[.,](\d{1,3})\s*-->\s*(\d{1,2}):(\d{2}):(\d{2})[.,](\d{1,3})")
+_ASS_TIME = re.compile(r"^Dialogue:[^,]*,[^,]*,(\d+):(\d{2}):(\d{2})[.](\d{1,3})", re.MULTILINE)
+
+
+def last_cue_end(text: str, ext: str) -> float | None:
+    """Seconds at which the last cue ends, or None when the text has no timings."""
+    if ext in (".ass", ".ssa"):
+        ends = [int(h) * 3600 + int(m) * 60 + int(s) + int(f) / 100 for h, m, s, f in _ASS_TIME.findall(text)]
+    else:
+        ends = [int(h) * 3600 + int(m) * 60 + int(s) + int(f) / 1000 for *_start, h, m, s, f in _TIME.findall(text)]
+    return max(ends) if ends else None
+
+
 def read_cues(data: bytes, ext: str, encoding: str) -> list[str]:
     """Cue texts of `data` decoded the way detect() chose."""
     codec = "utf-8-sig" if encoding == "utf-8" else encoding

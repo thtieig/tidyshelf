@@ -71,6 +71,7 @@ class Plan:
     def __init__(self, created: str | None = None):
         self.created = created or dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         self.items: list[Item] = []
+        self.warnings: list[str] = []  # for the person running the planner; not part of the plan file
 
     def item(self, item_id: str, kind: str, status: str = "ready", source: str | None = None) -> Item:
         it = Item(item_id, kind, status, source)

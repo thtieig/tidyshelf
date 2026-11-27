@@ -9,7 +9,8 @@ from collections import Counter
 
 from tidyshelf import parse
 from tidyshelf.episodes import Episode, parse_episode, resolve_numbering, season_from_folder
-from tidyshelf.itemops import PlanState, Planned, _finish, _real, analyse_subs, dropped_junk, emit_ops
+from tidyshelf.itemops import (PlanState, Planned, _finish, _real, analyse_subs, check_quality, dropped_junk,
+                               emit_ops, subtitle_timing)
 from tidyshelf.naming import episodes_text, render, safe_name, subtitle_stem
 from tidyshelf.plan import Item, file_stat
 from tidyshelf.scan import Candidate
@@ -80,6 +81,8 @@ def plan_series(cand: Candidate, cfg: dict, state: PlanState, trace: list[str], 
                               f"{e.ref.rsplit('/', 1)[-1]}", "series.duplicate")
     if numbering_review:
         return review(numbering_review, "series.numbering")
+    qfindings, qreview, probes = check_quality([e.ref for e in eps], cfg, state, trace)
+    findings += qfindings
 
     # The show.
     title = (override or {}).get("title") or (folder_p.title if folder_p and folder_p.title else None)
@@ -112,6 +115,8 @@ def plan_series(cand: Candidate, cfg: dict, state: PlanState, trace: list[str], 
         return review(msg, "conflict.exists")
     if claimed_by:
         return review(f"{claimed_by} in this plan already brings these episodes to {show_ref}", "conflict.in_plan")
+    if qreview:
+        return review(*qreview)
 
     # Names, then subtitles per episode.
     moves, targets_dir, stems = [], {}, {}
@@ -149,6 +154,7 @@ def plan_series(cand: Candidate, cfg: dict, state: PlanState, trace: list[str], 
             continue
         choice = analyse_subs(sorted(by_ep[e.ref]), cfg, base_dir, trace, e.ref.rsplit("/", 1)[-1])
         findings += choice.findings
+        findings += subtitle_timing(choice, probes[e.ref], lambda ref: os.path.relpath(_real(cfg, ref), base_dir))
         if choice.review:
             return review(f"{_label(e)}: {choice.review}", "subtitle.unknown_language")
         for s, lang, variant in choice.keep:

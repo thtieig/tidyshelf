@@ -52,6 +52,7 @@ class SubInfo:
     cues: int
     ad_cues: list[str] = field(default_factory=list)
     pair: str | None = None  # for an .idx: ref of its .sub, set by choose()
+    last_cue: float | None = None  # seconds at which the last cue ends
 
 
 @dataclass
@@ -101,11 +102,13 @@ def analyse(path: str, ref: str, cfg: dict, video_name: str | None = None) -> Su
     tokens = _name_tokens(name)
     claims = [LANG_TAGS[t] for t in tokens if t in LANG_TAGS]
     claimed = claims[-1] if claims else (_other_language(tokens[-1]) if tokens else None)
-    detection, cues = None, []
+    detection, cues, last_cue = None, [], None
     if ext in TEXT_EXTS:
         data = _head(path, READ_LIMIT + 1)
         detection = textsubs.detect(data, ext, textsubs.load_wordlists())
         cues = textsubs.read_cues(data[:READ_LIMIT], ext, detection.encoding)
+        codec = "utf-8-sig" if detection.encoding == "utf-8" else detection.encoding
+        last_cue = textsubs.last_cue_end(data[:READ_LIMIT].decode(codec, errors="replace"), ext)
     elif ext == ".idx":
         found = _IDX_ID.search(_head(path, 64 * 1024))
         if found:
@@ -124,7 +127,7 @@ def analyse(path: str, ref: str, cfg: dict, video_name: str | None = None) -> Su
     ad_cues = [c for c in edges if any(p.search(c) for p in patterns)]
     return SubInfo(ref=ref, path=path, ext=ext, size=st.st_size, mtime=st.st_mtime_ns // 10**9,
                    sha256=_hash(path), claimed=claimed, detection=detection, variant=variant,
-                   cues=len(cues), ad_cues=ad_cues)
+                   cues=len(cues), ad_cues=ad_cues, last_cue=last_cue)
 
 
 def _rank(sub: SubInfo):

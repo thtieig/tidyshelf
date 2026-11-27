@@ -48,3 +48,31 @@ class Lib:
 @pytest.fixture
 def lib(tmp_path):
     return Lib(tmp_path)
+
+
+@pytest.fixture(autouse=True)
+def _no_ffprobe(monkeypatch):
+    """Planner tests never depend on whether ffprobe is installed: no probe unless a test asks."""
+    from tidyshelf import quality
+
+    monkeypatch.setattr(quality, "run_ffprobe", lambda path, cfg: None)
+
+
+@pytest.fixture
+def probes(monkeypatch):
+    """probes({"file name": "fixture name"}): recorded ffprobe output per video file name."""
+    import json
+    import os
+    from pathlib import Path
+
+    from tidyshelf import quality
+
+    folder = Path(__file__).resolve().parent.parent / "fixtures" / "ffprobe"
+
+    def install(mapping):
+        def fake(path, cfg):
+            name = mapping.get(os.path.basename(path))
+            return None if name is None else json.loads((folder / f"{name}.json").read_text())
+        monkeypatch.setattr(quality, "run_ffprobe", fake)
+
+    return install

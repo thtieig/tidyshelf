@@ -11,6 +11,7 @@ from tidyshelf import quality
 from tidyshelf.quality import check, parse_ffprobe, summary
 
 PROBES = Path(__file__).resolve().parent.parent / "fixtures" / "ffprobe"
+REAL_RUN = quality.run_ffprobe  # planner tests stub it (conftest); these tests use the real one
 
 
 def load(name):
@@ -80,6 +81,7 @@ def test_unavailable_ffprobe_gives_none(cfg, monkeypatch):
 
 
 def test_ffprobe_called_without_shell_on_an_absolute_path(cfg, monkeypatch, tmp_path):
+    monkeypatch.setattr(quality, "run_ffprobe", REAL_RUN)
     seen = {}
 
     def fake_run(argv, **kw):
@@ -96,6 +98,7 @@ def test_ffprobe_called_without_shell_on_an_absolute_path(cfg, monkeypatch, tmp_
 
 
 def test_ffprobe_failure_is_suspect(cfg, monkeypatch, tmp_path):
+    monkeypatch.setattr(quality, "run_ffprobe", REAL_RUN)
     monkeypatch.setattr(quality.shutil, "which", lambda name: "/usr/bin/ffprobe")
     monkeypatch.setattr(quality.subprocess, "run",
                         lambda argv, **kw: subprocess.CompletedProcess(argv, 1, "", "Invalid data"))
@@ -113,7 +116,8 @@ def test_deep_check_reports_decoder_errors(cfg, monkeypatch, tmp_path):
 
 
 @pytest.mark.skipif(not (shutil.which("ffprobe") and shutil.which("ffmpeg")), reason="needs ffprobe and ffmpeg")
-def test_real_ffprobe_on_a_generated_clip(cfg, tmp_path):
+def test_real_ffprobe_on_a_generated_clip(cfg, tmp_path, monkeypatch):
+    monkeypatch.setattr(quality, "run_ffprobe", REAL_RUN)
     clip = tmp_path / "clip.mkv"
     subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "testsrc=size=1280x720:rate=25:duration=2",
                     "-f", "lavfi", "-i", "sine=duration=2", "-shortest", str(clip)], check=True)

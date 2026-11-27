@@ -6,7 +6,7 @@ import os
 import stat
 from dataclasses import dataclass, field
 
-from tidyshelf import subtitles
+from tidyshelf import quality, subtitles
 from tidyshelf.plan import Item, file_stat, trash_ref
 
 REVIEW_CODES = {
@@ -23,6 +23,8 @@ class PlanState:
     """What earlier items of the same plan already took."""
     library: dict[str, str]
     series_library: dict[str, str] = field(default_factory=dict)  # casefold(show folder) -> folder name
+    deep: bool = False  # plan --deep: decode every frame
+    quality_unchecked: bool = False  # some video could not be probed (no ffprobe)
     claimed: dict[str, str] = field(default_factory=dict)  # library key -> source ref
     trash_used: set[str] = field(default_factory=set)
 
@@ -66,11 +68,53 @@ def _finish(item: Item, findings: list, status: str | None = None, review: str |
     for level, c, msg in findings:
         item.finding(level, c, msg)
     if review is not None:
-        item.finding("warn", code or REVIEW_CODES.get(review, "review"), review)
+        code = code or REVIEW_CODES.get(review, "review")
+        if not any(c == code for _level, c, _msg in findings):  # already reported (e.g. a quality error)
+            item.finding("warn", code, review)
         item.status = "needs_review"
     elif status is not None:
         item.status = status
     return item
+
+
+BEYOND_VIDEO = 300  # seconds a subtitle may run past the end of the video
+
+
+def check_quality(refs: list[str], cfg: dict, state: PlanState, trace: list[str]):
+    """Probe each video. Returns (findings, review reason or None, {ref: Probe or None})."""
+    findings, review, probes = [], None, {}
+    for ref in refs:
+        path, name = _real(cfg, ref), ref.rsplit("/", 1)[-1].split(":", 1)[-1]
+        p = quality.probe(path, cfg)
+        probes[ref] = p
+        if p is None:
+            state.quality_unchecked = True
+        else:
+            trace.append(f"quality {name}: {quality.summary(p)}")
+            for action, code, msg in quality.check(p, cfg):
+                findings.append(("error" if action == "reject" else "warn", code, f"{name}: {msg}"))
+                if action == "reject" and review is None:
+                    review = (f"{name}: {msg}", code)
+                if code == "quality.large":
+                    trace.append(f"suggested re-encode (not run): {quality.reencode_hint(name, p)}")
+            if p.subtitle_langs:
+                findings.append(("info", "quality.embedded_subs", f"{name} has {len(p.subtitle_langs)} embedded "
+                                 f"subtitle streams ({', '.join(p.subtitle_langs)}); they stay inside the file"))
+        if state.deep:
+            problem = quality.deep_check(path, cfg)
+            if problem and review is None:
+                findings.append(("error", "quality.corrupt", f"{name}: {problem}"))
+                review = (f"{name} did not decode cleanly", "quality.corrupt")
+    return findings, review, probes
+
+
+def subtitle_timing(choice, probe, rel_of) -> list:
+    """Kept subtitles that run far past the end of the video (likely for another film or cut)."""
+    if probe is None or not probe.usable:
+        return []
+    return [("warn", "subtitle.beyond_video", f"{rel_of(s.ref)} ends at {s.last_cue / 60:.0f} min, the video at "
+             f"{probe.duration / 60:.0f} min") for s, _l, _v in choice.keep
+            if s.last_cue is not None and s.last_cue > probe.duration + BEYOND_VIDEO]
 
 
 def leaves(paths: list[str]) -> list[str]:

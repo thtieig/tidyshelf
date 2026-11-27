@@ -5,9 +5,9 @@ from __future__ import annotations
 import os
 import re
 
-from tidyshelf import episodes, parse, series
-from tidyshelf.itemops import (PlanState, Planned, _finish, _real, _video_bytes, analyse_subs, dropped_junk,
-                               emit_ops)
+from tidyshelf import episodes, parse, quality, series
+from tidyshelf.itemops import (PlanState, Planned, _finish, _real, _video_bytes, analyse_subs, check_quality,
+                               dropped_junk, emit_ops, subtitle_timing)
 from tidyshelf.naming import MOVIE_FOLDER_RE, movie_names, safe_name, subtitle_stem
 from tidyshelf.plan import Item, Plan, file_stat
 from tidyshelf.scan import Candidate, library_index, scan_source
@@ -56,25 +56,31 @@ def plan_candidate(cand: Candidate, cfg: dict, state: PlanState) -> Planned:
     lib = f"movies:{folder}"
     trace.append(f"target {lib}")
 
+    qfindings, qreview, probes = check_quality(cand.videos, cfg, state, trace)
+    findings += qfindings
+
     # Conflicts: the library, then earlier items of this plan.
     fm = MOVIE_FOLDER_RE.fullmatch(folder)
     key = (f"{fm['title']} ({fm['year']})" if fm else folder).casefold()  # the name as it will be on disk
     existing = state.library.get(key) or (lib if os.path.lexists(_real(cfg, lib)) else None)
     if existing is not None:
         size = file_stat(_real(cfg, cand.videos[0]))[0]
-        msg = (f"the library already has {existing} ({_video_bytes(cfg, existing)} bytes of video); "
-               f"this one is {size} bytes")
+        msg = (f"the library already has {existing} ({_library_quality(cfg, existing)}); "
+               f"this one: {quality.summary(probes[cand.videos[0]]) if probes[cand.videos[0]] else f'{size} bytes'}")
         if cfg["conflicts"]["on_exists"] == "skip":
             return Planned(_finish(item, findings + [("info", "conflict.exists", msg)], "skipped"), trace)
         return Planned(_finish(item, findings + left, review=msg, code="conflict.exists"), trace)
     if key in state.claimed:
         msg = f"{state.claimed[key]} in this plan already goes to {lib}"
         return Planned(_finish(item, findings + left, review=msg, code="conflict.in_plan"), trace)
+    if qreview:
+        return Planned(_finish(item, findings + left, review=qreview[0], code=qreview[1]), trace)
 
     # Subtitles.
     base_dir = cand.path if cand.is_dir else os.path.dirname(cand.path)
     choice = analyse_subs(cand.subs, cfg, base_dir, trace, os.path.basename(cand.videos[0].split(":", 1)[1]))
     findings += choice.findings
+    findings += subtitle_timing(choice, probes[cand.videos[0]], lambda ref: os.path.relpath(_real(cfg, ref), base_dir))
     if choice.review:
         return Planned(_finish(item, findings + left, review=choice.review), trace)
 
@@ -98,10 +104,25 @@ def plan_candidate(cand: Candidate, cfg: dict, state: PlanState) -> Planned:
     return Planned(_finish(item, findings + left), trace)
 
 
-def build_plan(cfg: dict, paths: list[str] | None = None, created: str | None = None) -> tuple[Plan, dict]:
+def _library_quality(cfg: dict, lib_ref: str) -> str:
+    """Quality of the video already in a library folder, or its size when it can't be probed."""
+    folder = _real(cfg, lib_ref)
+    videos = {e.lower() for e in cfg["video"]["extensions"]}
+    if os.path.isdir(folder) and not os.path.islink(folder):
+        for name in sorted(os.listdir(folder)):
+            path = os.path.join(folder, name)
+            if os.path.splitext(name)[1].lower() in videos and os.path.isfile(path) and not os.path.islink(path):
+                p = quality.probe(path, cfg)
+                if p is not None:
+                    return quality.summary(p)
+    return f"{_video_bytes(cfg, lib_ref)} bytes of video"
+
+
+def build_plan(cfg: dict, paths: list[str] | None = None, created: str | None = None,
+               deep: bool = False) -> tuple[Plan, dict]:
     """Plan every candidate (or those in `paths`). Returns the plan and a trace per item id."""
     plan, traces, counters = Plan(created), {}, {}
-    state = PlanState(library=library_index(cfg), series_library=series.series_index(cfg))
+    state = PlanState(library=library_index(cfg), series_library=series.series_index(cfg), deep=deep)
     for cand in scan_source(cfg, paths):
         try:
             planned = plan_candidate(cand, cfg, state)
@@ -115,5 +136,7 @@ def build_plan(cfg: dict, paths: list[str] | None = None, created: str | None = 
         item.id = f"{item.kind}-{counters[item.kind]:04}"
         plan.items.append(item)
         traces[item.id] = planned.trace
+    if state.quality_unchecked:
+        plan.warnings.append("ffprobe is not available: video quality was not checked")
     plan.validate()
     return plan, traces
