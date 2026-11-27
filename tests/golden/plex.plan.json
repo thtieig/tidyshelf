@@ -1,0 +1,165 @@
+{
+  "format": 1,
+  "tool": "tidyshelf 0.1.1",
+  "created": "2026-11-27T09:00:00Z",
+  "items": [
+    {
+      "id": "movie-0001",
+      "kind": "movie",
+      "status": "ready",
+      "source": "source:Amber.Valley.2009.1080p",
+      "findings": [],
+      "ops": [
+        {
+          "op": "mkdir",
+          "path": "movies:Amber Valley (2009)"
+        },
+        {
+          "op": "mkdir",
+          "path": "source:.tidyshelf-trash/source/Amber.Valley.2009.1080p/Subs"
+        },
+        {
+          "op": "move",
+          "from": "source:Amber.Valley.2009.1080p/Amber.Valley.2009.1080p.mkv",
+          "to": "movies:Amber Valley (2009)/Amber Valley (2009).mkv",
+          "size": 500,
+          "mtime": 1723000000
+        },
+        {
+          "op": "move",
+          "from": "source:Amber.Valley.2009.1080p/Subs/English.eng.srt",
+          "to": "movies:Amber Valley (2009)/Amber Valley (2009).en.srt",
+          "size": 2650,
+          "mtime": 1723000000
+        },
+        {
+          "op": "move",
+          "from": "source:Amber.Valley.2009.1080p/Subs/Spanish.spa.srt",
+          "to": "movies:Amber Valley (2009)/Amber Valley (2009).es.srt",
+          "size": 2652,
+          "mtime": 1723000000
+        },
+        {
+          "op": "move",
+          "from": "source:Amber.Valley.2009.1080p/Subs/English SDH.eng.srt",
+          "to": "source:.tidyshelf-trash/source/Amber.Valley.2009.1080p/Subs/English SDH.eng.srt",
+          "size": 3215,
+          "mtime": 1723000000
+        },
+        {
+          "op": "set_mode",
+          "path": "movies:Amber Valley (2009)"
+        },
+        {
+          "op": "set_mode",
+          "path": "movies:Amber Valley (2009)/Amber Valley (2009).mkv"
+        },
+        {
+          "op": "set_mode",
+          "path": "movies:Amber Valley (2009)/Amber Valley (2009).en.srt"
+        },
+        {
+          "op": "set_mode",
+          "path": "movies:Amber Valley (2009)/Amber Valley (2009).es.srt"
+        },
+        {
+          "op": "delete",
+          "path": "source:Amber.Valley.2009.1080p/Subs",
+          "dir": true,
+          "reason": "empty"
+        },
+        {
+          "op": "delete",
+          "path": "source:Amber.Valley.2009.1080p",
+          "dir": true,
+          "reason": "empty"
+        }
+      ]
+    },
+    {
+      "id": "series-0001",
+      "kind": "series",
+      "status": "ready",
+      "source": "source:Quiet.Bay.2015.S01.720p",
+      "findings": [],
+      "ops": [
+        {
+          "op": "mkdir",
+          "path": "series:Quiet Bay (2015)/Season 00"
+        },
+        {
+          "op": "mkdir",
+          "path": "series:Quiet Bay (2015)/Season 01"
+        },
+        {
+          "op": "move",
+          "from": "source:Quiet.Bay.2015.S01.720p/Quiet.Bay.S01E01.Arrival.mkv",
+          "to": "series:Quiet Bay (2015)/Season 01/Quiet Bay (2015) - s01e01 - Arrival.mkv",
+          "size": 300,
+          "mtime": 1723000000
+        },
+        {
+          "op": "move",
+          "from": "source:Quiet.Bay.2015.S01.720p/Quiet.Bay.S01E02E03.Two.Parter.mkv",
+          "to": "series:Quiet Bay (2015)/Season 01/Quiet Bay (2015) - s01e02-e03 - Two Parter.mkv",
+          "size": 600,
+          "mtime": 1723000000
+        },
+        {
+          "op": "move",
+          "from": "source:Quiet.Bay.2015.S01.720p/Specials/Quiet.Bay.S00E01.Christmas.mkv",
+          "to": "series:Quiet Bay (2015)/Season 00/Quiet Bay (2015) - s00e01 - Christmas.mkv",
+          "size": 100,
+          "mtime": 1723000000
+        },
+        {
+          "op": "move",
+          "from": "source:Quiet.Bay.2015.S01.720p/Quiet.Bay.S01E01.eng.srt",
+          "to": "series:Quiet Bay (2015)/Season 01/Quiet Bay (2015) - s01e01 - Arrival.en.srt",
+          "size": 2650,
+          "mtime": 1723000000
+        },
+        {
+          "op": "set_mode",
+          "path": "series:Quiet Bay (2015)"
+        },
+        {
+          "op": "set_mode",
+          "path": "series:Quiet Bay (2015)/Season 00"
+        },
+        {
+          "op": "set_mode",
+          "path": "series:Quiet Bay (2015)/Season 01"
+        },
+        {
+          "op": "set_mode",
+          "path": "series:Quiet Bay (2015)/Season 01/Quiet Bay (2015) - s01e01 - Arrival.mkv"
+        },
+        {
+          "op": "set_mode",
+          "path": "series:Quiet Bay (2015)/Season 01/Quiet Bay (2015) - s01e02-e03 - Two Parter.mkv"
+        },
+        {
+          "op": "set_mode",
+          "path": "series:Quiet Bay (2015)/Season 00/Quiet Bay (2015) - s00e01 - Christmas.mkv"
+        },
+        {
+          "op": "set_mode",
+          "path": "series:Quiet Bay (2015)/Season 01/Quiet Bay (2015) - s01e01 - Arrival.en.srt"
+        },
+        {
+          "op": "delete",
+          "path": "source:Quiet.Bay.2015.S01.720p/Specials",
+          "dir": true,
+          "reason": "empty"
+        },
+        {
+          "op": "delete",
+          "path": "source:Quiet.Bay.2015.S01.720p",
+          "dir": true,
+          "reason": "empty"
+        }
+      ]
+    }
+  ]
+}

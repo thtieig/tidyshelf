@@ -25,7 +25,7 @@ SYSTEM_CONFIG = Path("/etc/tidyshelf.toml")
 ENV_VAR = "TIDYSHELF_CONFIG"
 
 ENUMS: dict[tuple, tuple] = {
-    ("naming", "preset"): ("kodi",),
+    ("naming", "preset"): ("kodi", "plex"),
     ("subtitles", "prefer"): ("plain", "sdh"),
     ("subtitles", "detection"): ("stopwords",),
     ("junk", "junk_action"): ("delete", "trash"),
@@ -49,7 +49,7 @@ TEMPLATES: dict[tuple, set] = {
     ("naming", "movie_folder"): _MOVIE,
     ("naming", "movie_file"): _MOVIE,
     ("naming", "season_folder"): {"season"},
-    ("naming", "episode_file"): {"title", "season", "episode", "episodes", "episode_title"},
+    ("naming", "episode_file"): {"title", "show", "season", "episode", "episodes", "episode_title"},
     ("naming", "subtitle_file"): {"video", "lang", "variant"},
 }
 
@@ -106,6 +106,19 @@ def user_config_path() -> Path:
     return Path(base) / "tidyshelf" / "config.toml"
 
 
+# What a preset changes in [naming]; the user's own settings are layered on top of it.
+PRESETS: dict[str, dict] = {
+    "kodi": {},
+    "plex": {"naming": {
+        "movie_subs_folder": "",
+        "season_folder": "Season {season:02}",
+        "episode_file": "{show} - s{season:02}{episodes}< - {episode_title}>",
+        "episode_letter": "e",
+        "episode_join": "-e",
+    }},
+}
+
+
 def deep_merge(base: dict, over: dict) -> dict:
     """Tables merge key by key; everything else (lists included) is replaced."""
     out = copy.deepcopy(base)
@@ -131,16 +144,23 @@ def _read(path: Path) -> dict:
 
 def load(path: str | os.PathLike | None = None) -> tuple[dict, list[str]]:
     """Effective config and the list of layers it came from. Does not validate."""
-    cfg = load_defaults()
-    sources = ["defaults"]
+    layers, sources = [], ["defaults"]
     for layer in (Path(SYSTEM_CONFIG), user_config_path()):
         if layer.is_file():
-            cfg = deep_merge(cfg, _read(layer))
+            layers.append(_read(layer))
             sources.append(str(layer))
     explicit = path if path is not None else os.environ.get(ENV_VAR) or None
     if explicit is not None:
-        cfg = deep_merge(cfg, _read(Path(explicit)))
+        layers.append(_read(Path(explicit)))
         sources.append(str(explicit))
+    cfg = load_defaults()
+    for layer in layers:  # the last layer that names a preset decides it
+        naming = layer.get("naming")
+        preset = naming.get("preset") if isinstance(naming, dict) else None
+        if preset in PRESETS:
+            cfg = deep_merge(cfg, PRESETS[preset])
+    for layer in layers:
+        cfg = deep_merge(cfg, layer)
     return cfg, sources
 
 
@@ -271,7 +291,7 @@ def validate(cfg: dict) -> Report:
     naming = cfg.get("naming") if isinstance(cfg.get("naming"), dict) else {}
     for key in ("movie_subs_folder", "specials_folder"):
         value = naming.get(key)
-        if isinstance(value, str) and (not value or safe_name(value) != value):
+        if isinstance(value, str) and (value or key == "specials_folder") and (not value or safe_name(value) != value):
             report.errors.append(f"naming.{key}: must be a plain folder name (no / \\ : * ? \" < > |, "
                                  "not empty, not . or ..)")
     languages = cfg.get("subtitles", {}).get("languages") if isinstance(cfg.get("subtitles"), dict) else None

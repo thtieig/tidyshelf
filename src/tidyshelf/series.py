@@ -84,6 +84,12 @@ def show_folder(title: str, year: int | None, tags: list[str]) -> str:
     return safe_name(title + (f" ({year})" if year else "") + "".join(f" [{t}]" for t in tags))
 
 
+def _show_label(folder: str) -> str:
+    """The show folder name without its tags: "Show (2015) [ITA]" -> "Show (2015)"."""
+    m = _SHOW_NAME.fullmatch(folder)
+    return safe_name(m["title"] + (f" ({m['year']})" if m["year"] else ""))
+
+
 def _existing_episodes(cfg: dict, season_ref: str) -> set[tuple[int, int]]:
     folder, have = _real(cfg, season_ref), set()
     if not os.path.isdir(folder) or os.path.islink(folder):
@@ -192,8 +198,9 @@ def plan_series(cand: Candidate, cfg: dict, state: PlanState, trace: list[str], 
     for e in eps:
         season_ref = f"{show_ref}/{_season_dir(cfg, e.season)}"
         stem = safe_name(render(cfg["naming"]["episode_file"], {
-            "title": title, "season": e.season, "episode": e.episodes[0],
-            "episodes": episodes_text(list(e.episodes), cfg["naming"]["episode_join"]),
+            "title": title, "show": _show_label(show), "season": e.season, "episode": e.episodes[0],
+            "episodes": episodes_text(list(e.episodes), cfg["naming"]["episode_join"],
+                                      cfg["naming"]["episode_letter"]),
             "episode_title": safe_name(e.title) if e.title else None}))
         targets_dir[e.ref], stems[e.ref] = season_ref, stem
         moves.append((e.ref, f"{season_ref}/{stem}{os.path.splitext(e.ref)[1].lower()}"))

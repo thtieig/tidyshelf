@@ -236,7 +236,7 @@ refused, `4` some items need review. With several, the first of 1, 3, 4, 2 wins.
 
 ## I want ...
 
-- *Plex-style names* — later (only the `kodi` preset exists today)
+- *Plex-style names* — `preset = "plex"` in `[naming]` (see docs/NAMING.md, "Plex preset")
 - *to keep SDH subtitles as well* — `keep_sdh_alongside = true` in `[subtitles]`
 - *SDH rather than plain* — `prefer = "sdh"` in `[subtitles]`
 - *junk deleted, not trashed* — `junk_action = "delete"` in `[junk]`

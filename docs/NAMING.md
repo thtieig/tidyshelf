@@ -2,6 +2,7 @@
 
 The rules tidyshelf enforces. Copy to the new repo as `docs/NAMING.md`; this is the source of truth for the planner and its golden tests.
 Base convention: the Kodi naming scheme, also read natively by Jellyfin, Plex and Emby, so the library stays portable.
+A second preset, `plex`, follows Plex's own layout (see "Plex preset" at the end).
 
 ## Movies
 
@@ -67,3 +68,26 @@ Config can list folders the tool never touches (for example a legacy folder of o
 ## Video size
 
 The tool never re-encodes. It reports files whose size or bitrate exceeds the configured policy and suggests a re-encode command. Typical outliers are Blu-ray-rip bitrates with lossless audio.
+
+## Plex preset
+
+`[naming] preset = "plex"` switches the templates to the layout Plex documents. Everything else is
+unchanged: subtitle choice, junk, guardrails, show matching (`Show [ITA]`, `Show (2015)`), `--audit`.
+The library root folders (`Movies`, `TV Shows`, ...) are yours, set in `[roots]`.
+
+```
+<movies root>/<Title> (<Year>)/<Title> (<Year>).<ext>
+<movies root>/<Title> (<Year>)/<Title> (<Year>).<lang>[.sdh|.forced].<ext>
+<series root>/<Show> (<Year>)/Season 01/<Show> (<Year>) - s01e01[-e02][ - <Episode Title>].<ext>
+<series root>/<Show> (<Year>)/Season 00/<Show> (<Year>) - s00e01 - <Title>.<ext>
+```
+
+- Subtitles sit next to their video with the same base name; the movie `Subs/` folder is not used
+  (`movie_subs_folder = ""`). Plex also reads a subtitle subfolder, but next to the video is the form
+  every Plex client and its docs agree on, and it is the one that reads `sdh` and `forced` tags reliably.
+- Season folders are zero padded (`Season 01`); specials go in `Season 00`.
+- The file name carries the show name and year (`{show}`: the show folder without bracket tags), lowercase
+  `s01e01`; a multi-episode file is `s01e01-e02`.
+- Auditing a Kodi-style tree with this preset renames it into Plex style (moves only); a correct
+  Plex tree gives an empty plan.
+- Any template you set yourself in `[naming]` wins over the preset.

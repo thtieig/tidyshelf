@@ -91,7 +91,8 @@ def plan_candidate(cand: Candidate, cfg: dict, state: PlanState, kind_hint: str 
         return Planned(_finish(item, findings + left, review=choice.review), trace)
 
     # Operations.
-    subs_dir = f"{lib}/{cfg['naming']['movie_subs_folder']}"
+    subs_folder = cfg["naming"]["movie_subs_folder"]
+    subs_dir = f"{lib}/{subs_folder}" if subs_folder else lib  # empty: next to the video
     video = cand.videos[0]
     moves = [(video, f"{lib}/{stem}{os.path.splitext(video)[1].lower()}")]
     for s, lang, variant in choice.keep:
@@ -104,7 +105,7 @@ def plan_candidate(cand: Candidate, cfg: dict, state: PlanState, kind_hint: str 
         return Planned(_finish(item, findings + left, review="two subtitles would get the same name",
                                code="subtitle.collision"), trace)
     junk = [(ref, "junk") for ref in cand.junk] + dropped_junk(choice)
-    created = [lib] + ([subs_dir] if choice.keep else [])
+    created = [lib] + ([subs_dir] if choice.keep and subs_folder else [])
     findings += emit_ops(item, cand, cfg, state, moves, junk, created, trace)
     state.claimed[key] = cand.ref
     return Planned(_finish(item, findings + left), trace)

@@ -53,9 +53,9 @@ def safe_name(text: str) -> str:
     return "" if text in ("", ".", "..") else text
 
 
-def episodes_text(episodes: list[int], join: str) -> str:
-    """[2] -> "E02"; [23, 24] with join "-E" -> "E23-E24"."""
-    text = f"E{episodes[0]:02}"
+def episodes_text(episodes: list[int], join: str, letter: str = "E") -> str:
+    """[2] -> "E02"; [23, 24] with join "-E" -> "E23-E24"; with letter "e" and join "-e" -> "e23-e24"."""
+    text = f"{letter}{episodes[0]:02}"
     if len(episodes) > 1:
         text += f"{join}{episodes[-1]:02}"
     return text

@@ -31,7 +31,8 @@ movies = ""
 series = ""
 
 [naming]
-# Naming preset. Only "kodi" exists today (also read by Jellyfin, Plex and Emby).
+# Naming preset: "kodi" (also read by Jellyfin and Emby) or "plex". A preset only changes the
+# template defaults below; a template you set yourself always wins. See docs/NAMING.md.
 preset = "kodi"
 # Templates. Placeholders in {braces}; numbers take a format like {season:02}.
 # A segment inside <angle brackets> is left out when any placeholder in it is empty,
@@ -42,15 +43,18 @@ preset = "kodi"
 movie_folder = "{title} ({year})"
 # Movie file name without extension. Placeholders: {title} {year}
 movie_file = "{title} ({year})"
-# Folder for a movie's subtitles, inside the movie folder.
+# Folder for a movie's subtitles, inside the movie folder. Empty: next to the video.
 movie_subs_folder = "Subs"
-# Season folder, no zero padding. Placeholders: {season}
+# Season folder. Placeholders: {season}; "Season {season:02}" pads it.
 season_folder = "Season {season}"
 # Folder for specials (season 0).
 specials_folder = "Season 00"
-# Episode file name without extension. Placeholders: {title} (the show) {season} {episode}
+# Episode file name without extension. Placeholders: {title} (the show) {show} (the show with its
+# year, "Show (2015)", no tags) {season} {episode}
 # {episodes} ("E02", or "E23-E24" for a multi-episode file) {episode_title}
 episode_file = "S{season:02}{episodes}< - {episode_title}>"
+# The letter in {episodes}: "E" gives "E02"; "e" gives "e02".
+episode_letter = "E"
 # How {episodes} joins a multi-episode range: "E23" + episode_join + "24" -> "E23-E24".
 episode_join = "-E"
 # Subtitle file name without extension. Placeholders: {video} (the video's name without
