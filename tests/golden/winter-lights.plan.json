@@ -17,12 +17,12 @@
         {
           "level": "warn",
           "code": "subtitle.language_mismatch",
-          "msg": "Subs/English.eng.srt is labelled English but its text is Romanian (confidence 0.96)"
+          "msg": "Subs/English.eng.srt is labelled en (English) but its text is ro (Romanian) (confidence 0.96)"
         },
         {
           "level": "info",
           "code": "subtitle.dropped_language",
-          "msg": "Subs/English.eng.srt is Romanian (not in subtitles.languages)"
+          "msg": "Subs/English.eng.srt is ro (Romanian) (not in subtitles.languages)"
         },
         {
           "level": "warn",

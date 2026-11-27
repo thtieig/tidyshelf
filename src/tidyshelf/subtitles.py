@@ -24,6 +24,13 @@ _IDX_ID = re.compile(rb"^id:\s*([A-Za-z]{2,3})\b", re.MULTILINE)
 
 LANG_NAMES = {"en": "English", "es": "Spanish", "it": "Italian", "fr": "French", "de": "German",
               "pt": "Portuguese", "ro": "Romanian", "nl": "Dutch"}
+
+
+def lang_label(code: str) -> str:
+    """How findings name a language: the ISO 639-1 code, then the name when known: nl (Dutch)."""
+    return f"{code} ({LANG_NAMES[code]})" if code in LANG_NAMES else str(code)
+
+
 LANG_TAGS: dict[str, str] = {}
 for _code, _tags in {
     "en": "en eng english",
@@ -171,8 +178,8 @@ def choose(subs: list[SubInfo], cfg: dict, rel_of: Callable[[str], str]) -> Choi
             langs[s.ref] = det.lang
             if s.claimed and s.claimed != det.lang:
                 out.findings.append(("warn", "subtitle.language_mismatch",
-                                     f"{rel_of(s.ref)} is labelled {LANG_NAMES.get(s.claimed, s.claimed)} but its "
-                                     f"text is {LANG_NAMES.get(det.lang, det.lang)} (confidence {det.confidence:.2f})"))
+                                     f"{rel_of(s.ref)} is labelled {lang_label(s.claimed)} but its "
+                                     f"text is {lang_label(det.lang)} (confidence {det.confidence:.2f})"))
         else:
             langs[s.ref] = s.claimed
             if s.claimed and s.ext in TEXT_EXTS:
@@ -184,7 +191,7 @@ def choose(subs: list[SubInfo], cfg: dict, rel_of: Callable[[str], str]) -> Choi
             langs[unknown[0].ref] = conf["default_language"]
             out.findings.append(("info", "subtitle.default_language",
                                  f"{rel_of(unknown[0].ref)}: no recognisable language; "
-                                 f"assumed {conf['default_language']}"))
+                                 f"assumed {lang_label(conf['default_language'])}"))
         else:
             out.review = "several subtitles with no recognisable language"
             return out
@@ -194,7 +201,7 @@ def choose(subs: list[SubInfo], cfg: dict, rel_of: Callable[[str], str]) -> Choi
         if lang not in conf["languages"]:
             out.drop.append((s, "language"))
             out.findings.append(("info", "subtitle.dropped_language",
-                                 f"{rel_of(s.ref)} is {LANG_NAMES.get(lang, lang)} (not in subtitles.languages)"))
+                                 f"{rel_of(s.ref)} is {lang_label(lang)} (not in subtitles.languages)"))
             continue
         by_lang.setdefault(lang, []).append(s)
     for lang in sorted(by_lang):  # 6. per language: one forced, one main (+ SDH alongside)

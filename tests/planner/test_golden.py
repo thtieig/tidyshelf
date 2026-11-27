@@ -44,6 +44,6 @@ def test_golden_winter_lights(lib):
     codes = {f["code"] for f in item["findings"]}
     assert {"subtitle.language_mismatch", "subtitle.duplicate", "subtitle.dropped_language", "subtitle.ad_cues"} <= codes
     (mismatch,) = [f["msg"] for f in item["findings"] if f["code"] == "subtitle.language_mismatch"]
-    assert mismatch.startswith("Subs/English.eng.srt is labelled English but its text is Romanian (confidence 0.9")
+    assert mismatch.startswith("Subs/English.eng.srt is labelled en (English) but its text is ro (Romanian) (confidence 0.9")
     assert [op["path"] for op in item["ops"] if op["op"] == "delete"] == [f"source:{FOLDER}/Subs", f"source:{FOLDER}"]
     assert without_tool(plan.to_dict()) == without_tool(json.loads(GOLDEN.read_text(encoding="utf-8")))

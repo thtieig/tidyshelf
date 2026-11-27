@@ -64,7 +64,7 @@ def test_mislabelled_language_detected_and_dropped(cfg, put):
     assert dropped(c) == {"Subs/English.eng.srt": "language"}
     msgs = [m for _l, code, m in c.findings if code == "subtitle.language_mismatch"]
     assert len(msgs) == 1
-    assert msgs[0].startswith("Subs/English.eng.srt is labelled English but its text is Romanian (confidence ")
+    assert msgs[0].startswith("Subs/English.eng.srt is labelled en (English) but its text is ro (Romanian) (confidence ")
     assert "subtitle.dropped_language" in codes(c)
 
 
@@ -253,3 +253,18 @@ def test_lyric_cues_are_not_sdh(put):
     text = (SUBS / "en_plain.srt").read_text(encoding="utf-8")
     lyrics = "".join(f"\n{900 + i}\n01:00:{i:02},000 --> 01:00:{i:02},900\n♪ la la la ♪\n" for i in range(20))
     assert put("movie.en.srt", (text + lyrics).encode("utf-8")).variant is None
+
+
+def test_every_language_in_a_finding_is_the_iso_code_then_the_name(cfg, put):
+    tiny = b"1\n00:00:01,000 --> 00:00:02,000\nx\n"
+    c = choose([put("Subs/Arabic.ara.srt", tiny), put("Subs/Dutch.dut.srt", tiny + b"\n"),
+                put("Subs/en.srt", "en_plain.srt")], cfg, rel)
+    texts = [m for _l, code, m in c.findings if code == "subtitle.dropped_language"]
+    assert "Subs/Arabic.ara.srt is ar (not in subtitles.languages)" in texts
+    assert "Subs/Dutch.dut.srt is nl (Dutch) (not in subtitles.languages)" in texts
+
+
+def test_mismatch_finding_uses_the_same_language_style(cfg, put):
+    c = choose([put("Subs/English.eng.srt", "ro.srt"), put("Subs/en.srt", "en_plain.srt")], cfg, rel)
+    (msg,) = [m for _l, code, m in c.findings if code == "subtitle.language_mismatch"]
+    assert msg.startswith("Subs/English.eng.srt is labelled en (English) but its text is ro (Romanian) (confidence ")
