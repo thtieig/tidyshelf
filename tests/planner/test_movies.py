@@ -97,10 +97,10 @@ def test_trash_name_clash_gets_suffix(lib):
     assert trash == [f"source:.tidyshelf-trash/source/{FOLDER}/readme.1.txt"]
 
 
-def test_series_skipped_until_m3(lib):
+def test_series_go_to_the_series_planner(lib):
     lib.tree("source", "Some.Show.S01.720p/Some.Show.S01E01.720p.mkv\nSome.Show.S01.720p/Some.Show.S01E02.720p.mkv")
     item = only(lib)
-    assert (item["id"], item["status"], item["ops"], codes(item)) == ("series-0001", "skipped", [], ["series.not_yet"])
+    assert (item["id"], item["kind"], item["status"]) == ("series-0001", "series", "ready")
 
 
 def test_no_video_skipped(lib):

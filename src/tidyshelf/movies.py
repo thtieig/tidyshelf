@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 import re
 
-from tidyshelf import parse
+from tidyshelf import parse, series
 from tidyshelf.itemops import (PlanState, Planned, _finish, _real, _video_bytes, analyse_subs, dropped_junk,
                                emit_ops)
 from tidyshelf.naming import MOVIE_FOLDER_RE, movie_names, safe_name, subtitle_stem
@@ -32,9 +32,7 @@ def plan_candidate(cand: Candidate, cfg: dict, state: PlanState) -> Planned:
     forced_kind = override.get("kind") if override else None
     if forced_kind == "series" or forced_kind is None and (name.kind == "series"
                                                           or any(p.kind == "series" for p in video_ps)):
-        item.kind = "series"
-        return Planned(_finish(item, [("info", "series.not_yet", f"{rel}: looks like a series; series "
-                                       "planning is not available yet, left as it is")], "skipped"), trace)
+        return series.plan_series(cand, cfg, state, trace, override, folder_p)
     findings = list(name.findings)
     if len(cand.videos) > 1:
         return Planned(_finish(item, findings + left, review="several videos"), trace)
@@ -102,7 +100,7 @@ def plan_candidate(cand: Candidate, cfg: dict, state: PlanState) -> Planned:
 def build_plan(cfg: dict, paths: list[str] | None = None, created: str | None = None) -> tuple[Plan, dict]:
     """Plan every candidate (or those in `paths`). Returns the plan and a trace per item id."""
     plan, traces, counters = Plan(created), {}, {}
-    state = PlanState(library=library_index(cfg))
+    state = PlanState(library=library_index(cfg), series_library=series.series_index(cfg))
     for cand in scan_source(cfg, paths):
         try:
             planned = plan_candidate(cand, cfg, state)

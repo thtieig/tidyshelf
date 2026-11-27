@@ -22,6 +22,7 @@ REVIEW_CODES = {
 class PlanState:
     """What earlier items of the same plan already took."""
     library: dict[str, str]
+    series_library: dict[str, str] = field(default_factory=dict)  # casefold(show folder) -> folder name
     claimed: dict[str, str] = field(default_factory=dict)  # library key -> source ref
     trash_used: set[str] = field(default_factory=set)
 
