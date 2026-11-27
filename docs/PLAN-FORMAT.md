@@ -8,7 +8,7 @@ expected, and negative numbers are all errors. The authoritative implementation 
 ```json
 {
   "format": 1,
-  "tool": "tidyshelf 0.1.1",
+  "tool": "tidyshelf 0.2.0",
   "created": "2026-11-26T20:15:00Z",
   "items": [
     {
@@ -63,9 +63,31 @@ empty, start with `/`, contain empty segments, `.` or `..`, or NUL.
 |---|---|---|
 | `mkdir` | `path` | Create the folder and any missing parents (`mkdir -p`), never a root itself. |
 | `move` | `from`, `to`, `size`, `mtime` | Rename a regular file. `size` (bytes) and `mtime` (whole seconds, `st_mtime_ns // 10**9`) must still match. |
+| `write` | `to`, `data_b64`, `sha256`, `src`, `src_sha256`, `size`, `mtime` | Create a new file in a library with exactly these bytes (see below). |
 | `delete` | `path`, `size`, `mtime`, `reason` | Remove a regular file under `source`. |
 | `delete` | `path`, `dir: true`, `reason` | Remove an empty folder under `source`. |
 | `set_mode` | `path` | Apply `[owner]` from the applying machine's config. The plan carries no mode. |
+
+### `write`
+
+A cleaned copy of a subtitle (ad cues removed, converted to UTF-8). Added in tidyshelf 0.2.0; the
+format number stays 1, since it only adds an operation (an older `tidyshelf-apply` refuses a plan
+with it as an unknown op, and runs nothing).
+
+| Field | Meaning |
+|---|---|
+| `to` | Where the new file goes. Only under `movies` or `series`; the destination must not exist. |
+| `data_b64` | The file's bytes, base64 (standard alphabet, padded, no line breaks). At most 5 MiB decoded. |
+| `sha256` | Lowercase hex sha256 of the decoded data; must match. |
+| `src` | The file it was made from, under `source` (not in the trash). It is only read. |
+| `src_sha256` | sha256 of that file; it must still match when the step runs. |
+| `size`, `mtime` | Size and modification time (whole seconds) of **`src`**, as for `move`; they must still match. |
+
+The planner puts the `write` before the `move` of `src` into `source:.tidyshelf-trash/` (or the
+`delete` of it), and a `set_mode` on `to`. The plan id covers `data_b64`, so approving a plan
+approves the exact bytes. `tidyshelf-apply` writes them to a temporary file next to `to`
+(`.tidyshelf-tmp-*`, fsynced) and hard-links it to the final name, which cannot replace anything.
+The journal records the op without `data_b64`.
 
 Rules across the whole plan:
 
@@ -74,6 +96,8 @@ Rules across the whole plan:
 - Nothing is moved out of, or deleted inside, `.tidyshelf-trash/`.
 - No path is the source (`move.from`, `delete.path`) of more than one op; no two ops share a
   destination (`move.to`, or a `move.to` equal to a `mkdir.path`); no destination is also a source.
+- `write.to` counts as a destination (no other op may use it); `write.src` is read, not consumed:
+  it may be the source of one write only, and must not be the destination of another op.
 - Within an item, once a `delete` appears only deletes follow. Nested empty folders are deleted
   deepest first.
 
@@ -106,7 +130,8 @@ surrogate escape (`\udce9`) and round-trips back to the same byte on a Linux fil
 |---|---|---|
 | `header` | `plan_id`, `plan_size`, `plan_mtime`, `started`, `tool` | at the start of every run |
 | `mkdir` | `item`, `path` | before each folder level is created |
-| `begin` / `done` | `item`, `n` (op index), `op` | before / after each operation |
+| `begin` / `done` | `item`, `n` (op index), `op` | before / after each operation (a `write` without `data_b64`) |
 | `rollback` | `item`, `op` or `rmdir`, `result` | when a failed item is rolled back |
 | `item` | `item`, `result` (`ok`, `rolled_back`, `failed`, `partial`) | at the end of each item |
+| `trashdir` | `item`, `path` | a trash folder made to take back a written file (not a plan folder; undo ignores it) |
 | `undo_*` | as above | written by `--undo`, which ignores them when it reads the journal |

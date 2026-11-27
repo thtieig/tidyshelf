@@ -218,15 +218,18 @@ def plan_series(cand: Candidate, cfg: dict, state: PlanState, trace: list[str], 
         else:
             by_ep[owner].append(sub)
     base_dir = cand.path if cand.is_dir else os.path.dirname(cand.path)
+    cleaned = {}
     for e in eps:
         if not by_ep[e.ref]:
             continue
-        choice = analyse_subs(sorted(by_ep[e.ref]), cfg, base_dir, trace, e.ref.rsplit("/", 1)[-1])
+        choice = analyse_subs(sorted(by_ep[e.ref]), cfg, base_dir, trace, e.ref.rsplit("/", 1)[-1], clean=not state.audit)
         findings += choice.findings
         findings += subtitle_timing(choice, probes[e.ref], lambda ref: os.path.relpath(_real(cfg, ref), base_dir))
         if choice.review:
             return review(f"{_label(e)}: {choice.review}", "subtitle.unknown_language")
         for s, lang, variant in choice.keep:
+            if s.clean is not None:
+                cleaned[s.ref] = s
             sub_stem = subtitle_stem(cfg, stems[e.ref], lang, variant)
             moves.append((s.ref, f"{targets_dir[e.ref]}/{sub_stem}{s.ext}"))
             if s.pair:
@@ -240,7 +243,7 @@ def plan_series(cand: Candidate, cfg: dict, state: PlanState, trace: list[str], 
     for season_ref in sorted(set(targets_dir.values())):
         if not os.path.isdir(_real(cfg, season_ref)):
             created.append(season_ref)
-    findings += emit_ops(item, cand, cfg, state, moves, junk, created, trace)
+    findings += emit_ops(item, cand, cfg, state, moves, junk, created, trace, cleaned)
     for e in eps:
         for n in e.episodes:
             state.claimed[f"{show_ref.casefold()}|{e.season}|{n}"] = cand.ref

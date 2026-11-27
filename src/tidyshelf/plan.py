@@ -6,7 +6,9 @@ assembles documents in the shape it expects.
 
 from __future__ import annotations
 
+import base64
 import datetime as dt
+import hashlib
 import json
 import os
 
@@ -44,6 +46,13 @@ class Item:
 
     def move(self, src: str, dst: str, size: int, mtime: int) -> "Item":
         self.ops.append({"op": "move", "from": src, "to": dst, "size": size, "mtime": mtime})
+        return self
+
+    def write(self, to: str, data: bytes, src: str, src_sha256: str, size: int, mtime: int) -> "Item":
+        """A new file with exactly these bytes (a cleaned copy of `src`, whose size, mtime and hash it checks)."""
+        self.ops.append({"op": "write", "to": to, "data_b64": base64.b64encode(data).decode("ascii"),
+                         "sha256": hashlib.sha256(data).hexdigest(), "src": src, "src_sha256": src_sha256,
+                         "size": size, "mtime": mtime})
         return self
 
     def delete_file(self, path: str, size: int, mtime: int, reason: str) -> "Item":

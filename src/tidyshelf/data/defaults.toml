@@ -165,7 +165,12 @@ forced_markers = ["forced"]
 detection = "stopwords"
 # Minimum share of matched words (0..1) to trust a detected language.
 min_confidence = 0.6
-# Regexes for advertising cues at the start or end of a subtitle (reported, never removed in v1).
+# Remove advertising cues (see ad_patterns) from the .srt subtitles that are kept. The cleaned file is
+# written into the library as a new file; the original goes to the trash like other junk.
+clean_ads = true
+# Convert the kept .srt subtitles that are not UTF-8 (cp1252, cp1250, UTF-16) to UTF-8 without BOM.
+to_utf8 = true
+# Regexes for advertising cues at the start or end of a subtitle (the first three and last three cues).
 ad_patterns = [
   '(?i)\bwww\.',
   '(?i)https?://',

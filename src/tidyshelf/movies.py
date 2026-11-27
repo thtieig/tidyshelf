@@ -84,7 +84,8 @@ def plan_candidate(cand: Candidate, cfg: dict, state: PlanState, kind_hint: str 
 
     # Subtitles.
     base_dir = cand.path if cand.is_dir else os.path.dirname(cand.path)
-    choice = analyse_subs(cand.subs, cfg, base_dir, trace, os.path.basename(cand.videos[0].split(":", 1)[1]))
+    choice = analyse_subs(cand.subs, cfg, base_dir, trace, os.path.basename(cand.videos[0].split(":", 1)[1]),
+                          clean=not state.audit)
     findings += choice.findings
     findings += subtitle_timing(choice, probes[cand.videos[0]], lambda ref: os.path.relpath(_real(cfg, ref), base_dir))
     if choice.review:
@@ -105,7 +106,8 @@ def plan_candidate(cand: Candidate, cfg: dict, state: PlanState, kind_hint: str 
                                code="subtitle.collision"), trace)
     junk = [(ref, "junk") for ref in cand.junk] + dropped_junk(choice)
     created = [lib] + ([subs_dir] if choice.keep else [])
-    findings += emit_ops(item, cand, cfg, state, moves, junk, created, trace)
+    cleaned = {s.ref: s for s, _l, _v in choice.keep if s.clean is not None}
+    findings += emit_ops(item, cand, cfg, state, moves, junk, created, trace, cleaned)
     state.claimed[key] = cand.ref
     return Planned(_finish(item, findings + left), trace)
 

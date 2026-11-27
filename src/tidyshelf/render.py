@@ -17,6 +17,8 @@ VARS = {"source": "SOURCE", "movies": "MOVIES", "series": "SERIES"}
 
 
 def _describe(op: dict) -> list[str]:
+    if op["op"] == "write":
+        return [f"  write    {op['to']}  (cleaned from {op['src']})"]
     if op["op"] == "move":
         return [f"  move     {op['from']}", f"             -> {op['to']}"]
     if op["op"] == "delete":
@@ -60,7 +62,7 @@ HEADER = r'''#!/usr/bin/env bash
 # Dry-run unless run with --execute. Every step is checked before the first one runs. A step is
 # refused if its file changed (size or mtime), is or sits under a symlink, its destination exists, or
 # source and destination are on different filesystems. Deletes only under SOURCE, capped.
-# Needs bash and GNU coreutils (stat, realpath, mv -n). Root folders must be real paths (no symlinks).
+# Needs bash and GNU coreutils (stat, realpath, mv -n, sha256sum, base64). Root folders must be real paths (no symlinks).
 set -euo pipefail
 
 SOURCE={source}
@@ -117,6 +119,29 @@ do_move() {{
   if [ "$PASS" = run ]; then
     mv -n -- "$1" "$2"
     gone "$1" || refuse "$1: not moved (its destination appeared)"
+  fi
+  return 0
+}}
+do_write() {{  # to src size mtime src_sha256 data_sha256 data_base64
+  inside "$1"; inside "$2"
+  case "$1" in "$MOVIES"/*|"$SERIES"/*) ;; *) refuse "$1: a write goes only into the movies or series folder" ;; esac
+  case "$2" in "$SOURCE"/*) ;; *) refuse "$2: a write is made from a file under the source root" ;; esac
+  [ "${{#7}}" -le {max_b64} ] || refuse "$1: data is larger than {max_bytes_write} bytes"
+  [ "$(printf '%s' "$7" | base64 -d | sha256sum | cut -d' ' -f1)" = "$6" ] || refuse "$1: data does not match its sha256"
+  if [ -f "$1" ] && [ ! -L "$1" ] && [ "$(sha256sum -- "$1" | cut -d' ' -f1)" = "$6" ]; then return 0; fi
+  if [ -L "$2" ]; then refuse "$2: is a symlink (never followed)"; fi
+  is_file "$2" "$3" "$4" || refuse "$2: missing, not a regular file, or changed since the plan was made"
+  [ "$(sha256sum -- "$2" | cut -d' ' -f1)" = "$5" ] || refuse "$2: content changed since the plan was made"
+  gone "$1" || refuse "$1: exists (never overwritten)"
+  step "write $1 (cleaned from $2)"
+  if [ "$PASS" = run ]; then
+    local tmp
+    tmp=$(mktemp -- "$(dirname -- "$1")/.tidyshelf-tmp.XXXXXX") || refuse "$1: cannot create a temporary file"
+    printf '%s' "$7" | base64 -d > "$tmp" || {{ rm -f -- "$tmp"; refuse "$1: cannot write"; }}
+    if [ "$(sha256sum -- "$tmp" | cut -d' ' -f1)" != "$6" ]; then rm -f -- "$tmp"; refuse "$1: written data differs"; fi
+    chmod 0644 -- "$tmp"
+    if ! ln -- "$tmp" "$1"; then rm -f -- "$tmp"; refuse "$1: its destination appeared (never overwritten)"; fi
+    rm -f -- "$tmp"
   fi
   return 0
 }}
@@ -184,7 +209,8 @@ def to_sh(doc: dict, cfg: dict) -> bytes:
         **{name: q(os.path.realpath(cfg["roots"][name])) for name in VARS},
         user=q(owner["user"]), group=q(owner["group"]), dir_mode=q(owner["dir_mode"]), file_mode=q(owner["file_mode"]),
         files=len(deletes), nbytes=sum(op["size"] for op in deletes),
-        max_files=safety["max_delete_files"], max_bytes=safety["max_delete_bytes"])]
+        max_files=safety["max_delete_files"], max_bytes=safety["max_delete_bytes"],
+        max_b64=tidyshelf_apply.MAX_WRITE_BYTES * 4 // 3 + 8, max_bytes_write=tidyshelf_apply.MAX_WRITE_BYTES)]
     for it in doc["items"]:
         out.append(_comment(f"# {it['id']} {it['status']} {it.get('source', '')}") + "\n")
         if it["status"] != "ready":
@@ -195,6 +221,9 @@ def to_sh(doc: dict, cfg: dict) -> bytes:
                 out.append(f"do_mkdir {_path(op['path'])}\n")
             elif op["op"] == "move":
                 out.append(f"do_move {_path(op['from'])} {_path(op['to'])} {op['size']} {op['mtime']}\n")
+            elif op["op"] == "write":
+                out.append(f"do_write {_path(op['to'])} {_path(op['src'])} {op['size']} {op['mtime']} "
+                           f"{q(op['src_sha256'])} {q(op['sha256'])} {q(op['data_b64'])}\n")
             elif op["op"] == "delete" and op.get("dir"):
                 out.append(f"do_rmdir {_path(op['path'])}\n")
             elif op["op"] == "delete":
