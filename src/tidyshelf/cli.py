@@ -89,6 +89,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_plan.add_argument("--audit", action="store_true",
                         help="check the movie and series libraries instead of the source (empty plan = consistent)")
 
+    p_plan.add_argument("--kind", choices=("movie", "series"),
+                        help="treat every item in this run as a movie (or a series), whatever its name says")
+
     p_run = sub.add_parser("run", help="plan and apply in one go on the machine that holds the files (dry-run unless --execute)")
     _common(p_run, top=False)
     p_run.add_argument("paths", nargs="*", metavar="PATH", help="what to plan (default: the whole source root)")
@@ -100,6 +103,9 @@ def build_parser() -> argparse.ArgumentParser:
         p_run.add_argument(flag, action="store_true", help=text)
     p_run.add_argument("--approve", metavar="PLAN_ID", help="refuse unless the plan id matches")
     p_run.add_argument("--on-error", choices=("stop", "continue"), default="stop", help="as for tidyshelf-apply")
+
+    p_run.add_argument("--kind", choices=("movie", "series"),
+                       help="treat every item in this run as a movie (or a series), whatever its name says")
 
     p_undo = sub.add_parser("undo", help="reverse the moves of a previous apply (dry-run unless --execute)")
     _common(p_undo, top=False)
@@ -114,6 +120,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_explain = sub.add_parser("explain", help="show why one item is planned the way it is")
     _common(p_explain, top=False)
     p_explain.add_argument("path", metavar="PATH", help="a folder or file in the source root")
+    p_explain.add_argument("--kind", choices=("movie", "series"),
+                           help="treat every item in this run as a movie (or a series), whatever its name says")
     return parser
 
 
@@ -219,7 +227,7 @@ def cmd_plan(args, out: _Out) -> int:
     if args.out and args.out != "-" and not _outside_roots(cfg, args.out, out):
         return 1
     try:
-        plan, _traces = movies.build_plan(cfg, args.paths or None, deep=args.deep, audit=args.audit)
+        plan, _traces = movies.build_plan(cfg, args.paths or None, deep=args.deep, audit=args.audit, kind=args.kind)
     except ValueError as exc:
         out.error(str(exc))
         return 1
@@ -286,7 +294,7 @@ def cmd_run(args, out: _Out) -> int:
     if cfg is None:
         return 1
     try:
-        plan, _traces = movies.build_plan(cfg, args.paths or None, deep=args.deep, audit=args.audit)
+        plan, _traces = movies.build_plan(cfg, args.paths or None, deep=args.deep, audit=args.audit, kind=args.kind)
     except ValueError as exc:
         out.error(str(exc))
         return 1
@@ -313,7 +321,7 @@ def cmd_explain(args, out: _Out) -> int:
     if cfg is None:
         return 1
     try:
-        plan, traces = movies.build_plan(cfg, [args.path])
+        plan, traces = movies.build_plan(cfg, [args.path], kind=args.kind)
     except ValueError as exc:
         out.error(str(exc))
         return 1

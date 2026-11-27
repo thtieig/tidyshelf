@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tidyshelf"
-version = "0.1.0"
+version = "0.1.1"
 description = "Tidy a folder of video files into a consistently named library. Plan first, apply safely."
 readme = "README.md"
 license = "MIT"

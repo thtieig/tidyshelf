@@ -12,7 +12,8 @@ from tidyshelf.naming import MOVIE_FOLDER_RE, movie_names, safe_name, subtitle_s
 from tidyshelf.plan import Item, Plan, file_stat
 from tidyshelf.scan import Candidate, library_index, scan_root, scan_source
 
-def plan_candidate(cand: Candidate, cfg: dict, state: PlanState, kind_hint: str | None = None) -> Planned:
+def plan_candidate(cand: Candidate, cfg: dict, state: PlanState, kind_hint: str | None = None,
+                   force_kind: str | None = None) -> Planned:
     """One item for one candidate. Its id is set by build_plan()."""
     trace: list[str] = []
     rel = cand.ref.split(":", 1)[1]
@@ -29,7 +30,9 @@ def plan_candidate(cand: Candidate, cfg: dict, state: PlanState, kind_hint: str 
     name = parse.decide_movie(folder_p, video_ps[0], override, cfg, trace)
     if name.ignore:
         return Planned(_finish(item, [], "skipped"), trace)
-    forced_kind = override.get("kind") if override else kind_hint
+    forced_kind = force_kind or (override.get("kind") if override else kind_hint)
+    if force_kind:
+        trace.append(f"kind forced to {force_kind} (--kind)")
     markers = any(episodes.has_marker(os.path.basename(v)) for v in cand.videos)  # S1M1: guessit says "movie"
     if forced_kind == "series" or forced_kind is None and (name.kind == "series" or markers
                                                           or any(p.kind == "series" for p in video_ps)):
@@ -126,8 +129,9 @@ def _consistent(item: Item) -> bool:
 
 
 def build_plan(cfg: dict, paths: list[str] | None = None, created: str | None = None,
-               deep: bool = False, audit: bool = False) -> tuple[Plan, dict]:
+               deep: bool = False, audit: bool = False, kind: str | None = None) -> tuple[Plan, dict]:
     """Plan every candidate (or those in `paths`); with `audit`, the library folders instead.
+    `kind` ("movie" or "series") forces the kind of every item, as an [[override]] kind would, and wins over one.
     Returns the plan and a trace per item id."""
     if audit and paths:
         raise ValueError("--audit checks whole libraries; it takes no PATH")
@@ -137,7 +141,7 @@ def build_plan(cfg: dict, paths: list[str] | None = None, created: str | None = 
              if audit else [(c, None) for c in scan_source(cfg, paths)])
     for cand, hint in cands:
         try:
-            planned = plan_candidate(cand, cfg, state, hint)
+            planned = plan_candidate(cand, cfg, state, hint, kind)
         except OSError as exc:  # e.g. a subtitle that cannot be read: report, keep planning the rest
             what = os.path.basename(exc.filename) if isinstance(exc.filename, str) else "a file"
             item = Item("", "movie", "ready", cand.ref)

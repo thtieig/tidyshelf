@@ -48,6 +48,7 @@ FFmpeg (`ffprobe`); without it the plan is made anyway and says quality was not 
 tidyshelf plan --out plan.json         # changes nothing; prints each item and the plan id
 tidyshelf explain "source:Some.Folder" # why one item is planned the way it is
 tidyshelf plan --verbose               # also print the info findings (hidden by default)
+tidyshelf plan --kind series PATH      # treat the item as a series (or movie) whatever its name says
 tidyshelf-apply plan.json              # dry-run: shows every step
 tidyshelf-apply plan.json --execute    # does it, after you type the plan id
 tidyshelf undo plan.json --execute     # puts moved files back (deleted ones are not restored)

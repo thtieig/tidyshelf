@@ -8,7 +8,7 @@ expected, and negative numbers are all errors. The authoritative implementation 
 ```json
 {
   "format": 1,
-  "tool": "tidyshelf 0.1.0",
+  "tool": "tidyshelf 0.1.1",
   "created": "2026-11-26T20:15:00Z",
   "items": [
     {

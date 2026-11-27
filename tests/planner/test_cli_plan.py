@@ -216,3 +216,42 @@ def test_text_emit_hides_info_unless_verbose(lib, capsys):
     assert "info:" not in out and "info findings hidden" in out
     _c, out, _e = run(lib, capsys, "plan", "--emit", "text", "-v")
     assert "info: subtitle.dropped_language" in out
+
+
+def _kinds(out):
+    return {it["source"]: it["kind"] for it in json.loads(out)["items"]}
+
+
+def test_plan_kind_series_forces_a_movie_looking_folder(lib, capsys):
+    film(lib)
+    code, out, err = run(lib, capsys, "plan", "--json", "--kind", "series")
+    assert _kinds(out) == {f"source:{FOLDER}": "series"}, err
+    assert _kinds(run(lib, capsys, "plan", "--json")[1]) == {f"source:{FOLDER}": "movie"}
+
+
+def test_plan_kind_movie_forces_a_series_looking_folder(lib, capsys):
+    lib.tree("source", "Harbour.Show.S01.1080p/Harbour.Show.S01E01.1080p.mkv [100]")
+    assert _kinds(run(lib, capsys, "plan", "--json")[1]) == {"source:Harbour.Show.S01.1080p": "series"}
+    code, out, err = run(lib, capsys, "plan", "--json", "--kind", "movie")
+    assert _kinds(out) == {"source:Harbour.Show.S01.1080p": "movie"}, err
+
+
+def test_plan_kind_beats_override_kind_but_keeps_override_title(lib, capsys):
+    film(lib)
+    lib.write_config('[[override]]\nmatch = "Winter.Lights*"\nkind = "series"\ntitle = "Winter Lamps"\nyear = 2005\n')
+    code, out, err = run(lib, capsys, "plan", "--json", "--kind", "movie")
+    (item,) = json.loads(out)["items"]
+    assert item["kind"] == "movie" and item["target"] == "movies:Winter Lamps (2005)", err
+
+
+def test_run_kind_and_explain_show_the_forced_kind(lib, capsys):
+    film(lib)
+    code, out, err = run(lib, capsys, "run", "--kind", "series")
+    assert "series-0001" in out + err
+    code, out, err = run(lib, capsys, "explain", f"source:{FOLDER}", "--kind", "series")
+    assert "kind forced to series (--kind)" in out
+
+
+def test_kind_rejects_other_values(lib, capsys):
+    code, _out, err = run(lib, capsys, "plan", "--kind", "film")
+    assert code == 1 and "--kind" in err

@@ -33,7 +33,7 @@ import stat
 import sys
 import tomllib
 
-VERSION = "0.1.0"
+VERSION = "0.1.1"
 FORMAT = 1
 ROOT_NAMES = ("source", "movies", "series")
 TRASH_DIR = ".tidyshelf-trash"

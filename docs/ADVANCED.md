@@ -83,6 +83,11 @@ match = "re:^Old Rips"
 ignore = true
 ```
 
+To force the kind for one run without editing the config, pass `--kind movie` or `--kind series` to
+`plan`, `run` or `explain`. It applies to every item planned in that run, as an override `kind` would,
+and wins over an override's `kind`; an override's `title`, `year` and `season` still apply. Point it at
+one item (`tidyshelf plan --kind series "source:Some.Folder"`), otherwise it changes every item in the source folder.
+
 To keep a whole folder out of every plan, `[exclude] patterns` is the better tool.
 
 ## How a series is read
