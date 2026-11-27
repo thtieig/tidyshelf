@@ -16,6 +16,7 @@ def _isolate_env(tmp_path, monkeypatch):
     home.mkdir()
     monkeypatch.setenv("HOME", str(home))
     monkeypatch.setenv("XDG_CONFIG_HOME", str(home / ".config"))
+    monkeypatch.setenv("XDG_STATE_HOME", str(home / ".local" / "state"))
     for key in list(os.environ):
         if key.startswith("TIDYSHELF_"):
             monkeypatch.delenv(key)

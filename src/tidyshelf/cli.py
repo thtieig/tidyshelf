@@ -8,6 +8,7 @@ import os
 import sys
 from pathlib import Path
 
+import tidyshelf_apply
 from tidyshelf import __version__, config, movies, render
 
 INIT_TEMPLATE = """\
@@ -84,6 +85,24 @@ def build_parser() -> argparse.ArgumentParser:
                         help="json: the plan (default); sh: a shell script (less safe); text: a readable listing")
     p_plan.add_argument("--audit", action="store_true",
                         help="check the movie and series libraries instead of the source (empty plan = consistent)")
+
+    p_run = sub.add_parser("run", help="plan and apply in one go on the machine that holds the files (dry-run unless --execute)")
+    _common(p_run, top=False)
+    p_run.add_argument("paths", nargs="*", metavar="PATH", help="what to plan (default: the whole source root)")
+    p_run.add_argument("--out", metavar="FILE", help="where to keep the plan (default: the tidyshelf state folder)")
+    p_run.add_argument("--audit", action="store_true", help="check the libraries instead of the source")
+    p_run.add_argument("--deep", action="store_true", help="also decode every video to find damaged files (slow)")
+    for flag, text in (("--execute", "really do it (default: dry-run)"), ("--yes", "do not ask for the typed confirmation"),
+                       ("--allow-large-delete", "lift the delete caps")):
+        p_run.add_argument(flag, action="store_true", help=text)
+    p_run.add_argument("--approve", metavar="PLAN_ID", help="refuse unless the plan id matches")
+    p_run.add_argument("--on-error", choices=("stop", "continue"), default="stop", help="as for tidyshelf-apply")
+
+    p_undo = sub.add_parser("undo", help="reverse the moves of a previous apply (dry-run unless --execute)")
+    _common(p_undo, top=False)
+    p_undo.add_argument("plan", metavar="PLAN", help="the plan file that was applied (its journal is next to it)")
+    p_undo.add_argument("--execute", action="store_true", help="really do it (default: dry-run)")
+    p_undo.add_argument("--yes", action="store_true", help="do not ask for the typed confirmation")
 
     p_explain = sub.add_parser("explain", help="show why one item is planned the way it is")
     _common(p_explain, top=False)
@@ -190,13 +209,8 @@ def cmd_plan(args, out: _Out) -> int:
     cfg = _planning_config(args, out)
     if cfg is None:
         return 1
-    if args.out and args.out != "-":
-        real = os.path.realpath(args.out)
-        for name, root in cfg["roots"].items():
-            base = os.path.realpath(root)
-            if os.path.commonpath([real, base]) == base:
-                out.error(f"--out {args.out}: is inside roots.{name}; write the plan somewhere else")
-                return 1
+    if args.out and args.out != "-" and not _outside_roots(cfg, args.out, out):
+        return 1
     try:
         plan, _traces = movies.build_plan(cfg, args.paths or None, deep=args.deep, audit=args.audit)
     except ValueError as exc:
@@ -227,6 +241,61 @@ def cmd_plan(args, out: _Out) -> int:
         for line in _summary_lines(doc["items"], pid, args.out):
             print(line, file=stream)
     return code
+
+
+def state_dir() -> Path:
+    """Where `run` keeps its plans (and their journals, for `undo`)."""
+    base = os.environ.get("XDG_STATE_HOME") or os.path.join(os.path.expanduser("~"), ".local", "state")
+    return Path(base) / "tidyshelf" / "plans"
+
+
+def _outside_roots(cfg: dict, path: str, out: _Out) -> bool:
+    real = os.path.realpath(path)
+    for name, root in cfg["roots"].items():
+        base = os.path.realpath(root)
+        if os.path.commonpath([real, base]) == base:
+            out.error(f"--out {path}: is inside roots.{name}; keep the plan somewhere else")
+            return False
+    return True
+
+
+def _passthrough(args) -> list[str]:
+    argv = []
+    for name in ("config",):
+        if getattr(args, name, None):
+            argv += [f"--{name}", getattr(args, name)]
+    for flag in ("execute", "yes", "allow_large_delete", "json", "quiet"):
+        if getattr(args, flag, False):
+            argv.append("--" + flag.replace("_", "-"))
+    if getattr(args, "approve", None):
+        argv += ["--approve", args.approve]
+    if getattr(args, "on_error", None):
+        argv += ["--on-error", args.on_error]
+    return argv
+
+
+def cmd_run(args, out: _Out) -> int:
+    cfg = _planning_config(args, out)
+    if cfg is None:
+        return 1
+    try:
+        plan, _traces = movies.build_plan(cfg, args.paths or None, deep=args.deep, audit=args.audit)
+    except ValueError as exc:
+        out.error(str(exc))
+        return 1
+    for msg in plan.warnings:
+        out.warn(msg)
+    target = Path(args.out) if args.out else state_dir() / f"plan-{plan.plan_id}.json"
+    if not _outside_roots(cfg, str(target), out):
+        return 1
+    target.parent.mkdir(parents=True, exist_ok=True)
+    _write_atomic(target, plan.dumps())
+    out.info(f"plan {plan.plan_id} kept in {target} (for `tidyshelf undo {target}`)")
+    return tidyshelf_apply.main([str(target)] + _passthrough(args))
+
+
+def cmd_undo(args, out: _Out) -> int:
+    return tidyshelf_apply.main([args.plan, "--undo"] + _passthrough(args))
 
 
 def cmd_explain(args, out: _Out) -> int:
@@ -277,6 +346,10 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_plan(args, out)
     if args.command == "explain":
         return cmd_explain(args, out)
+    if args.command == "run":
+        return cmd_run(args, out)
+    if args.command == "undo":
+        return cmd_undo(args, out)
     parser.print_usage(sys.stderr)
     return 1
 
