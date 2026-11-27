@@ -1,7 +1,7 @@
 # Advanced configuration
 
-> Movies and series are covered. Quality (M4), audit (M5) and running plan and apply on
-> different machines (M6) are filled in as they land.
+> Movies, series and quality are covered. Audit (M5) and running plan and apply on different
+> machines (M6) are filled in as they land.
 
 Every setting, with its default and a comment, is in
 [`src/tidyshelf/data/defaults.toml`](../src/tidyshelf/data/defaults.toml).
@@ -127,6 +127,32 @@ Subtitles are judged by what is inside them, not by their names:
 Advertising cues at the start or end (`ad_patterns`, plus your own `ad_patterns_extra`) and
 subtitles with very few cues are reported, never edited.
 
+## Video quality
+
+With `ffprobe` installed (part of FFmpeg), every video in the plan is read: codec, resolution,
+duration, bitrate, audio tracks. Without it the plan is made anyway and `plan` warns once that
+quality was not checked (`[video] ffprobe` names the program; empty switches the check off).
+
+Each file is put in a class by its height (wide "scope" files count by their width: 1920×816 is
+1080p): `sd` below 720, `hd`, `fhd` from 1080, `uhd` from 2160. `[video.quality]` then checks:
+
+| Check | Rule | Action key (default) |
+|---|---|---|
+| large | above the class's `max_gb_per_hour` or `max_video_kbps` | `on_large` (warn) |
+| tiny | below the class's `min_gb_per_hour` | `on_tiny` (warn) |
+| codec | video codec not in `allowed_codecs` | `on_codec` (warn) |
+| low_res | effective height below `min_height` | `on_low_res` (warn) |
+| no_audio | no audio track and `audio_required` | `on_no_audio` (reject) |
+
+`warn` adds a finding; `reject` makes the item *needs review* (nothing of it is applied); `ok`
+ignores the check. A file ffprobe cannot read is reported as *suspect*. tidyshelf never
+re-encodes; for a large file `explain` shows a suggested `ffmpeg` command you can run yourself.
+Embedded subtitle streams are listed, and a subtitle that runs more than 5 minutes past the end of
+its video is reported (it probably belongs to another cut). `plan --deep` also decodes every frame
+with `ffmpeg` to find damaged files (slow); a file with errors needs review.
+
+When the library already has the movie, the finding shows both qualities so you can choose.
+
 ## Junk
 
 Everything that is not a video or a subtitle, plus files matching `[junk] patterns` (samples,
@@ -144,6 +170,7 @@ extras folders (`[parse] extras_folders`) are left untouched, and so is the fold
 - *to skip a folder* — add a regex to `[exclude] patterns`, e.g. `'^movies:_keep-out(/|$)'`
 - *to fix one item by hand* — an `[[override]]` block (see above)
 - *to see why something was named that way* — `tidyshelf explain PATH`
-- *a show that numbers episodes oddly* — (M3)
-- *a different quality policy* — `[video.quality]` (M4)
+- *a show that numbers episodes oddly* — see "How a series is read"; an `[[override]]` `season` fixes loose numbers
+- *a different quality policy* — `[video.quality]` (see above)
+- *to find damaged files* — `tidyshelf plan --deep`
 - *to run plan and apply on different machines* — (M6)

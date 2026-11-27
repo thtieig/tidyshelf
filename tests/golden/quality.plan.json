@@ -1,0 +1,61 @@
+{
+  "format": 1,
+  "tool": "tidyshelf 0.1.0.dev0",
+  "created": "2026-11-27T10:00:00Z",
+  "items": [
+    {
+      "id": "movie-0001",
+      "kind": "movie",
+      "status": "ready",
+      "source": "source:Bright.Harbour.2011.2160p",
+      "findings": [
+        {
+          "level": "warn",
+          "code": "quality.large",
+          "msg": "Bright.Harbour.2011.2160p.mkv: 2160p hevc, 30.00 GB/h, 60000 kbit/s, 1 audio: above the uhd limits (12.0 GB/h, 30000 kbit/s)"
+        }
+      ],
+      "ops": [
+        {
+          "op": "mkdir",
+          "path": "movies:Bright Harbour (2011)"
+        },
+        {
+          "op": "move",
+          "from": "source:Bright.Harbour.2011.2160p/Bright.Harbour.2011.2160p.mkv",
+          "to": "movies:Bright Harbour (2011)/Bright Harbour (2011).mkv",
+          "size": 900,
+          "mtime": 1723000000
+        },
+        {
+          "op": "set_mode",
+          "path": "movies:Bright Harbour (2011)"
+        },
+        {
+          "op": "set_mode",
+          "path": "movies:Bright Harbour (2011)/Bright Harbour (2011).mkv"
+        },
+        {
+          "op": "delete",
+          "path": "source:Bright.Harbour.2011.2160p",
+          "dir": true,
+          "reason": "empty"
+        }
+      ]
+    },
+    {
+      "id": "series-0001",
+      "kind": "series",
+      "status": "needs_review",
+      "source": "source:Old Coast",
+      "findings": [
+        {
+          "level": "error",
+          "code": "quality.no_audio",
+          "msg": "Old Coast - 1x02 - Silence.mkv: no audio track"
+        }
+      ],
+      "ops": []
+    }
+  ]
+}
