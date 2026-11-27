@@ -289,6 +289,9 @@ def cmd_run(args, out: _Out) -> int:
         return 1
     for msg in plan.warnings:
         out.warn(msg)
+    if args.out == "-":
+        out.error("run needs a plan file (the journal and undo live next to it); --out - is not possible")
+        return 1
     target = Path(args.out) if args.out else state_dir() / f"plan-{plan.plan_id}.json"
     if not _outside_roots(cfg, str(target), out):
         return 1

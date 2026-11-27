@@ -77,3 +77,9 @@ def test_run_with_an_item_needing_review_exits_4(lib, capsys):
 
 def test_run_nothing_to_do(lib, capsys):
     assert run(lib, capsys, "run")[0] == 0
+
+
+def test_run_out_dash_is_refused(lib, capsys):
+    film(lib)
+    code, _out, err = run(lib, capsys, "run", "--out", "-")
+    assert code == 1 and "file" in err and not Path("-").exists()
