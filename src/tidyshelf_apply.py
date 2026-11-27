@@ -7,8 +7,10 @@ The plan is treated as untrusted input. In short (docs/SAFETY.md has the full li
 * Dry-run unless --execute; --execute also needs a typed confirmation or --yes.
 * Plans name paths as "root:relative/path"; roots come only from this machine's config. No "..",
   no absolute paths, no symlinks anywhere below a root, no special files, nothing in [exclude].
-* Four operations only: mkdir, move, delete, set_mode. Moves are a single rename on one filesystem,
-  never copy+delete, never onto an existing path. Deletes only under the source root, capped.
+* Five operations only: mkdir, move, write, delete, set_mode. Moves are a single rename on one
+  filesystem, never copy+delete, never onto an existing path. A write creates a new file in a library
+  (never over an existing path) with exactly the bytes in the plan, after re-checking the file it was
+  made from; undo moves it to the trash. Deletes only under the source root, capped.
 * Every operation is checked twice: in a full in-memory pre-flight of the whole plan, and again
   right before it runs (the file must still have the size and mtime the plan recorded).
 * A lock prevents overlapping runs; an fsynced journal makes runs resumable and undoable.
@@ -19,6 +21,8 @@ Exit codes: 0 nothing to do / success, 1 error, 2 dry-run has changes, 3 refused
 from __future__ import annotations
 
 import argparse
+import base64
+import binascii
 import datetime
 import difflib
 import errno
@@ -33,11 +37,13 @@ import stat
 import sys
 import tomllib
 
-VERSION = "0.1.1"
+VERSION = "0.2.0"
 FORMAT = 1
 ROOT_NAMES = ("source", "movies", "series")
 TRASH_DIR = ".tidyshelf-trash"
 LOCK_NAME = ".tidyshelf.lock"
+MAX_WRITE_BYTES = 5 * 1024 * 1024  # a write op carries at most this many bytes (and reads a source this size)
+WRITE_ROOTS = ("movies", "series")
 SYSTEM_CONFIG = "/etc/tidyshelf.toml"
 ENV_VAR = "TIDYSHELF_CONFIG"
 EXIT_OK, EXIT_ERROR, EXIT_CHANGES, EXIT_REFUSED, EXIT_REVIEW = 0, 1, 2, 3, 4
@@ -199,6 +205,7 @@ LEVELS = ("info", "warn", "error")
 OP_FIELDS = {  # op -> (required, optional)
     "mkdir": ({"op", "path"}, set()),
     "move": ({"op", "from", "to", "size", "mtime"}, set()),
+    "write": ({"op", "to", "data_b64", "sha256", "src", "src_sha256", "size", "mtime"}, set()),
     "delete": ({"op", "path", "reason"}, {"size", "mtime", "dir"}),
     "set_mode": ({"op", "path"}, set()),
 }
@@ -284,6 +291,39 @@ def _in_trash(root: str, rel: str) -> bool:
     return root == "source" and (rel == TRASH_DIR or rel.startswith(TRASH_DIR + "/"))
 
 
+_HEX64 = re.compile(r"[0-9a-f]{64}")
+
+
+def write_bytes(op: dict) -> bytes:
+    """The data of a write op, decoded strictly; PlanError unless it is well formed, within the size
+    cap, and exactly what op['sha256'] says."""
+    text = op["data_b64"]
+    if not isinstance(text, str) or len(text) > MAX_WRITE_BYTES * 4 // 3 + 8:
+        raise PlanError(f"write: data is not a string, or larger than {MAX_WRITE_BYTES} bytes")
+    try:
+        data = base64.b64decode(text.encode("ascii"), validate=True)
+    except (binascii.Error, UnicodeEncodeError):
+        raise PlanError("write: data_b64 is not valid base64") from None
+    if len(data) > MAX_WRITE_BYTES:
+        raise PlanError(f"write: data is larger than {MAX_WRITE_BYTES} bytes")
+    if hashlib.sha256(data).hexdigest() != op["sha256"]:
+        raise PlanError("write: data does not match its sha256")
+    return data
+
+
+def _check_write(op: dict, where: str, errors: list) -> None:
+    for key in ("sha256", "src_sha256"):
+        if not (isinstance(op[key], str) and _HEX64.fullmatch(op[key])):
+            errors.append(f"{where}: {key!r} must be 64 lowercase hex digits")
+            return
+    if type(op["size"]) is int and op["size"] > MAX_WRITE_BYTES:
+        errors.append(f"{where}: the source is larger than {MAX_WRITE_BYTES} bytes")
+    try:
+        write_bytes(op)
+    except PlanError as exc:
+        errors.append(f"{where}: {exc}")
+
+
 def _check_op(op, where: str, errors: list) -> None:
     if not isinstance(op, dict) or not isinstance(op.get("op"), str) or op["op"] not in OP_FIELDS:
         errors.append(f"{where}: unknown op {op.get('op') if isinstance(op, dict) else op!r}")
@@ -307,8 +347,10 @@ def _check_op(op, where: str, errors: list) -> None:
                     errors.append(f"{where}: missing field {key!r}")
         if not isinstance(op["reason"], str) or not op["reason"]:
             errors.append(f"{where}: 'reason' must be a non-empty string")
+    if kind == "write":
+        _check_write(op, where, errors)
     refs = {}
-    for key in ("path", "from", "to"):
+    for key in ("path", "from", "to", "src"):
         if key in op:
             if not isinstance(op[key], str):
                 errors.append(f"{where}: {key!r} must be a string")
@@ -323,6 +365,11 @@ def _check_op(op, where: str, errors: list) -> None:
             errors.append(f"{where}: cannot move out of {TRASH_DIR}/")
         if dst_root == "source" and src_root != "source" and not _in_trash(dst_root, dst_rel):
             errors.append(f"{where}: moves into source are only allowed from source or into {TRASH_DIR}/")
+    if kind == "write" and "to" in refs and "src" in refs:
+        if refs["to"][0] not in WRITE_ROOTS:
+            errors.append(f"{where}: a write goes only into {' or '.join(WRITE_ROOTS)}")
+        if refs["src"][0] != "source" or _in_trash(*refs["src"]):
+            errors.append(f"{where}: a write is made from a file under source (not in {TRASH_DIR}/)")
     if kind == "delete" and "path" in refs:
         root, rel = refs["path"]
         if root != "source":
@@ -398,10 +445,14 @@ def _check_whole_plan(items: list, errors: list) -> None:
     sources: dict[str, int] = {}
     move_dests: dict[str, int] = {}
     mkdirs: set[str] = set()
+    reads: dict[str, int] = {}  # files a write is made from: read, not consumed
     for item in items:
         for op in item["ops"]:
             if op["op"] == "move":
                 sources[op["from"]] = sources.get(op["from"], 0) + 1
+                move_dests[op["to"]] = move_dests.get(op["to"], 0) + 1
+            elif op["op"] == "write":
+                reads[op["src"]] = reads.get(op["src"], 0) + 1
                 move_dests[op["to"]] = move_dests.get(op["to"], 0) + 1
             elif op["op"] == "delete":
                 sources[op["path"]] = sources.get(op["path"], 0) + 1
@@ -415,6 +466,11 @@ def _check_whole_plan(items: list, errors: list) -> None:
             errors.append(f"{ref}: is the destination of more than one op")
     for ref in sorted((set(move_dests) | mkdirs) & set(sources)):
         errors.append(f"{ref}: is the destination of one op and the source of another op")
+    for ref, count in sorted(reads.items()):
+        if count > 1:
+            errors.append(f"{ref}: is the source of more than one write")
+        if ref in move_dests or ref in mkdirs:
+            errors.append(f"{ref}: is the source of a write and the destination of another op")
 
 
 def plan_hash(doc: dict) -> str:
@@ -520,6 +576,100 @@ def _rename(guard: Guard, src: str, dst: str) -> None:
 def _rmdir(guard: Guard, path: str) -> None:
     with At(guard, path) as at:
         os.rmdir(at.name, dir_fd=at.fd)
+
+
+def _slim(op: dict) -> dict:
+    """An op without the data of a write: what the journal and the --json output carry."""
+    return {k: v for k, v in op.items() if k != "data_b64"}
+
+
+def _read_regular(guard: Guard, full: str, ref: str) -> tuple[bytes, os.stat_result]:
+    """A regular file's bytes (at most MAX_WRITE_BYTES), read through its opened folder without
+    following symlinks; the stat is the opened file's own."""
+    with At(guard, full) as at:
+        try:  # O_NONBLOCK: a FIFO swapped in cannot hang the open
+            fd = os.open(at.name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC, dir_fd=at.fd)
+        except FileNotFoundError:
+            raise Refusal(f"{ref}: missing") from None
+        except OSError as exc:
+            if exc.errno == errno.ELOOP:
+                raise Refusal(f"{ref}: is a symlink (never followed)") from None
+            raise
+    try:
+        st = os.fstat(fd)
+        if not stat.S_ISREG(st.st_mode):
+            raise Refusal(f"{ref}: not a regular file")
+        if st.st_size > MAX_WRITE_BYTES:
+            raise Refusal(f"{ref}: larger than {MAX_WRITE_BYTES} bytes")
+        data = b""
+        while len(data) <= st.st_size:
+            chunk = os.read(fd, 1024 * 1024)
+            if not chunk:
+                break
+            data += chunk
+    finally:
+        os.close(fd)
+    if len(data) != st.st_size:
+        raise Refusal(f"{ref}: changed while it was read")
+    return data, st
+
+
+def _check_write_source(guard: Guard, op: dict) -> None:
+    """The file a write was made from still is what the plan saw: size, mtime and content."""
+    data, st = _read_regular(guard, guard.path(op["src"]), op["src"])
+    if (st.st_size, st.st_mtime_ns // 10**9) != (op["size"], op["mtime"]):
+        raise Refusal(f"{op['src']}: changed since the plan was made")
+    if hashlib.sha256(data).hexdigest() != op["src_sha256"]:
+        raise Refusal(f"{op['src']}: content changed since the plan was made")
+
+
+def _create_new(guard: Guard, full: str, data: bytes) -> None:
+    """Create `full` with `data`, never replacing anything: the bytes go to a temporary file in the
+    same folder (created with O_EXCL, fsynced), which is then hard-linked to the final name; link
+    fails if the name exists, so unlike a rename it cannot replace anything, even in a race.
+    Where hard links are unsupported it falls back to the check + rename a move uses."""
+    with At(guard, full) as at:
+        if at.lstat() is not None:
+            raise Refusal(f"{at.ref}: destination exists (never overwritten)")
+        tmp = f".tidyshelf-tmp-{os.getpid()}-{os.urandom(4).hex()}"
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC, 0o666, dir_fd=at.fd)
+        try:
+            try:
+                view = memoryview(data)
+                while view:
+                    view = view[os.write(fd, view):]
+                os.fsync(fd)
+            finally:
+                os.close(fd)
+            try:
+                os.link(tmp, at.name, src_dir_fd=at.fd, dst_dir_fd=at.fd, follow_symlinks=False)
+            except FileExistsError:
+                raise Refusal(f"{at.ref}: destination exists (never overwritten)") from None
+            except OSError as exc:
+                if exc.errno not in (errno.EPERM, errno.ENOTSUP, errno.EOPNOTSUPP, errno.ENOSYS):
+                    raise
+                if at.lstat() is not None:
+                    raise Refusal(f"{at.ref}: destination exists (never overwritten)") from None
+                os.rename(tmp, at.name, src_dir_fd=at.fd, dst_dir_fd=at.fd)
+        finally:
+            try:
+                os.unlink(tmp, dir_fd=at.fd)
+            except FileNotFoundError:
+                pass
+        os.fsync(at.fd)
+
+
+def _trash_name(guard: Guard, view: "View", ref: str) -> str:
+    """Where a written file goes when it is taken back: source:.tidyshelf-trash/<root>/<path>, with .1, .2
+    ... before the extension if that is taken."""
+    root, rel = split_ref(ref)
+    target = f"source:{TRASH_DIR}/{root}/{rel}"
+    stem, ext = os.path.splitext(target)
+    n = 0
+    while view.info(guard.path(target)) is not None:
+        n += 1
+        target = f"{stem}.{n}{ext}"
+    return target
 
 
 # --- filesystem view ----------------------------------------------------------------------------
@@ -680,8 +830,16 @@ class Ctx:
     def __init__(self, item_id: str):
         self.id, self.n = item_id, 0
         self.moves: list[dict] = []
+        self.writes: list[dict] = []
+        self.track = True  # False: folders it creates are not rolled back and not part of the plan
         self.created: list[tuple[str, str]] = []
         self.del_files = self.del_bytes = 0
+
+
+def _quiet_ctx() -> Ctx:
+    ctx = Ctx("trash")
+    ctx.track = False
+    return ctx
 
 
 class Executor:
@@ -706,7 +864,7 @@ class Executor:
         try:
             return getattr(self, "op_" + op["op"])(view, op, ctx)
         except OSError as exc:  # changes use names relative to an open folder: report plan refs
-            where = op["path"] if "path" in op else f"{op['from']} -> {op['to']}"
+            where = op["path"] if "path" in op else op["to"] if "from" not in op else f"{op['from']} -> {op['to']}"
             raise OSError(exc.errno, f"{where}: {exc.strerror}") from None
 
     def op_mkdir(self, view: View, op: dict, ctx: Ctx) -> str:
@@ -730,10 +888,11 @@ class Executor:
             if view.dry:
                 view.add(level, ("dir", 0, 0, found[3]))
             else:
-                self.log({"t": "mkdir", "item": ctx.id, "path": level_ref})
+                self.log({"t": "mkdir" if ctx.track else "trashdir", "item": ctx.id, "path": level_ref})
                 with At(self.guard, level) as at:
                     os.mkdir(at.name, dir_fd=at.fd)
-                ctx.created.append((level, level_ref))
+                if ctx.track:
+                    ctx.created.append((level, level_ref))
         return "change"
 
     def op_move(self, view: View, op: dict, ctx: Ctx) -> str:
@@ -768,6 +927,59 @@ class Executor:
         ctx.moves.append(op)
         self.log({"t": "done", "item": ctx.id, "n": ctx.n, "op": op})
         return "change"
+
+    def op_write(self, view: View, op: dict, ctx: Ctx) -> str:
+        to_ref, src_ref = op["to"], op["src"]
+        to, src = self.guard.path(to_ref), self.guard.path(src_ref)
+        if split_ref(to_ref)[0] not in WRITE_ROOTS:
+            raise Refusal(f"{to_ref}: a write goes only into {' or '.join(WRITE_ROOTS)}")
+        if split_ref(src_ref)[0] != "source" or _in_trash(*split_ref(src_ref)):
+            raise Refusal(f"{src_ref}: a write is made from a file under source (not in {TRASH_DIR}/)")
+        data = write_bytes(op)
+        d = view.info(to)
+        if d is not None:
+            try:  # already written by an earlier run (exactly these bytes): nothing to do
+                if d[0] == "file" and to not in view.added and \
+                        hashlib.sha256(_read_regular(self.guard, to, to_ref)[0]).hexdigest() == op["sha256"]:
+                    return "done"
+            except Refusal:
+                pass
+            raise Refusal(f"{to_ref}: destination exists (never overwritten)")
+        parent = view.info(os.path.dirname(to))
+        if parent is None or parent[0] != "dir":
+            raise Refusal(f"{to_ref}: destination parent folder missing")
+        s = view.info(src)
+        if s is None:
+            raise Refusal(f"{src_ref}: source file missing")
+        _check_file(s, src_ref, op)
+        if src in view.added:
+            raise Refusal(f"{src_ref}: source is not an existing file")
+        _check_write_source(self.guard, op)
+        if view.dry:
+            view.add(to, ("file", len(data), 0, view.dev_near(os.path.dirname(to))))
+            return "change"
+        self.log({"t": "begin", "item": ctx.id, "n": ctx.n, "op": _slim(op)})
+        _create_new(self.guard, to, data)
+        ctx.writes.append(op)
+        self.log({"t": "done", "item": ctx.id, "n": ctx.n, "op": _slim(op)})
+        return "change"
+
+    def trash_written(self, op: dict, view: View) -> str:
+        """Take a file this plan wrote back out of the library: move it into the trash (never delete),
+        and only if it still has the bytes that were written. Returns where it went."""
+        to = self.guard.path(op["to"])
+        data, _st = _read_regular(self.guard, to, op["to"])
+        if hashlib.sha256(data).hexdigest() != op["sha256"]:
+            raise Refusal(f"{op['to']}: changed since it was written (left in place)")
+        target = _trash_name(self.guard, view, op["to"])
+        self.op_mkdir(view, {"op": "mkdir", "path": target.rsplit("/", 1)[0]}, _quiet_ctx())
+        try:
+            _rename(self.guard, to, self.guard.path(target))
+        except OSError as exc:
+            if exc.errno == errno.EXDEV:
+                raise Refusal(f"{op['to']} -> {target}: different filesystem (never copied)") from None
+            raise
+        return target
 
     def op_delete(self, view: View, op: dict, ctx: Ctx) -> str:
         ref = op["path"]
@@ -898,6 +1110,13 @@ class Executor:
             except (Refusal, PlanError, OSError) as exc:
                 problems.append(f"{op['to']} not rolled back ({exc})")
             self.log({"t": "rollback", "item": ctx.id, "op": op, "result": "skipped"})
+        for op in reversed(ctx.writes):
+            try:
+                target = self.trash_written(op, real)
+                self.log({"t": "rollback", "item": ctx.id, "op": _slim(op), "result": "ok", "trash": target})
+            except (Refusal, PlanError, OSError) as exc:
+                problems.append(f"{op['to']} not rolled back ({exc})")
+                self.log({"t": "rollback", "item": ctx.id, "op": _slim(op), "result": "skipped"})
         for path, ref in reversed(ctx.created):
             found = real.info(path)
             if found and found[0] == "dir" and real.is_empty_dir(path):
@@ -933,6 +1152,8 @@ class Out:
 
 
 def _describe(op: dict) -> str:
+    if op["op"] == "write":
+        return f"write    {op['to']}  (cleaned from {op['src']})"
     if op["op"] == "move":
         return f"move     {op['from']}\n             -> {op['to']}"
     if op["op"] == "delete":
@@ -1118,13 +1339,13 @@ def cmd_apply(args, cfg: dict, out: Out) -> int:
         out.info(f"applied plan {pid}: {sum(1 for r in results.values() if r == 'ok')} items changed")
     out.doc({"plan_id": pid, "plan_hash": full_hash, "mode": mode, "exit": code, "errors": errors,
              "items": [{"id": it["id"], "status": it["status"], "result": results.get(it["id"], it["status"]),
-                        "ops": [dict(op, state=pre[it["id"]]["states"][n]) if it["id"] in pre else op
+                        "ops": [dict(_slim(op), state=pre[it["id"]]["states"][n]) if it["id"] in pre else _slim(op)
                                 for n, op in enumerate(it["ops"])]} for it in items]})
     return code
 
 
 def _undo_records(doc: dict, entries: list) -> tuple[list[dict], list[str]]:
-    """The moves and created folders in a journal, each checked against the plan: a journal line
+    """The moves, writes and created folders in a journal, each checked against the plan: a journal line
     for an op the plan does not have is refused, so a planted journal cannot steer undo."""
     ops = {(it["id"], n): op for it in doc["items"] for n, op in enumerate(it["ops"])}
     allowed_dirs: dict[str, set] = {}
@@ -1145,6 +1366,12 @@ def _undo_records(doc: dict, entries: list) -> tuple[list[dict], list[str]]:
             op = e.get("op")
             if type(e.get("n")) is not int or not isinstance(op, dict):
                 raise PlanError("journal: a begin/done line has no valid 'n' or 'op'")
+            if op.get("op") == "write":  # the journal has no data; it must equal the plan's op without it
+                planned = ops.get((item, e["n"]))
+                if planned is None or planned.get("op") != "write" or _slim(planned) != op:
+                    raise Refusal(f"journal write {op.get('to')} is not in the plan")
+                moves[(item, e["n"])] = planned
+                continue
             if op.get("op") != "move":
                 continue
             problems: list[str] = []
@@ -1182,6 +1409,24 @@ def cmd_undo(args, cfg: dict, out: Out) -> int:
     guard = Guard(cfg, [lock_path, journal_path] + ([plan_path] if plan_path else []))
     view, todo, problems = View(dry=True), [], []
     for op in reversed(moves):
+        if op["op"] == "write":
+            to = guard.path(op["to"])
+            found = view.info(to)
+            if found is None:
+                continue  # never written, or already taken back
+            try:
+                data, _st = _read_regular(guard, to, op["to"])
+                same = found[0] == "file" and hashlib.sha256(data).hexdigest() == op["sha256"]
+            except Refusal:
+                same = False
+            if not same:
+                problems.append(f"{op['to']}: changed since it was written; left in place, cannot undo")
+                continue
+            target = _trash_name(guard, view, op["to"])
+            view.remove(to)
+            view.add(target, found)
+            todo.append(op)
+            continue
         src, dst = guard.path(op["from"]), guard.path(op["to"])
         s, d = view.info(src), view.info(dst)
         if s is None and d and d[0] == "file" and d[1:3] == (op["size"], op["mtime"]):
@@ -1201,7 +1446,10 @@ def cmd_undo(args, cfg: dict, out: Out) -> int:
     mode = "execute" if args.execute else "dry-run"
     out.info(f"undo plan {pid}: {len(todo)} moves to reverse, {mode}")
     for op in todo:
-        out.info(f"  move     {op['to']}\n             -> {op['from']}")
+        if op["op"] == "write":
+            out.info(f"  trash    {op['to']}  (written file goes to {TRASH_DIR}/)")
+        else:
+            out.info(f"  move     {op['to']}\n             -> {op['from']}")
     code, done = EXIT_OK, 0
     if problems:
         problems.append("nothing was undone")
@@ -1217,6 +1465,11 @@ def cmd_undo(args, cfg: dict, out: Out) -> int:
             ex.journal = journal
             try:
                 for op in todo:
+                    if op["op"] == "write":
+                        target = ex.trash_written(op, View(dry=False))
+                        ex.log({"t": "trashed", "item": "undo", "op": _slim(op), "trash": target})
+                        done += 1
+                        continue
                     root = op["from"].split(":", 1)[0]
                     parent = os.path.dirname(guard.path(op["from"]))
                     if parent != cfg["_roots"][root]:
@@ -1239,7 +1492,8 @@ def cmd_undo(args, cfg: dict, out: Out) -> int:
     for msg in problems:
         out.error(msg)
     out.doc({"plan_id": pid, "mode": mode, "exit": code, "errors": problems,
-             "moves": [{"from": op["to"], "to": op["from"]} for op in todo]})
+             "moves": [{"from": op["to"], "to": op["from"]} if op["op"] == "move" else {"from": op["to"], "to": None}
+                       for op in todo]})
     return code
 
 
