@@ -87,17 +87,17 @@ def _settle_samples(cand: Candidate, root: str) -> None:
         (cand.junk if any(s >= size for s in sizes) else cand.videos).append(ref)
 
 
-def _candidate(root: str, rel: str, rules: _Rules) -> Candidate:
+def _candidate(root: str, rel: str, rules: _Rules, root_name: str = "source") -> Candidate:
     try:
-        return _candidate_unchecked(root, rel, rules)
+        return _candidate_unchecked(root, rel, rules, root_name)
     except OSError as exc:
         name = os.path.relpath(exc.filename, root) if isinstance(exc.filename, str) else rel
-        return Candidate(f"source:{rel}", os.path.join(root, rel), True,
+        return Candidate(f"{root_name}:{rel}", os.path.join(root, rel), True,
                          error=f"cannot read {name}: {exc.strerror or exc}")
 
 
-def _candidate_unchecked(root: str, rel: str, rules: _Rules) -> Candidate:
-    ref, path = f"source:{rel}", os.path.join(root, rel)
+def _candidate_unchecked(root: str, rel: str, rules: _Rules, root_name: str = "source") -> Candidate:
+    ref, path = f"{root_name}:{rel}", os.path.join(root, rel)
     mode = os.lstat(path).st_mode
     if stat.S_ISLNK(mode) or not (stat.S_ISDIR(mode) or stat.S_ISREG(mode)):
         return Candidate(ref, path, False, left=[(ref, "symlink" if stat.S_ISLNK(mode) else "special file")])
@@ -162,6 +162,13 @@ def scan_source(cfg: dict, paths: list[str] | None = None) -> list[Candidate]:
     cands = _attach_sidecars([_candidate(root, n, rules) for n in top if n in wanted or n in loose], root, rules)
     refs = {f"source:{n}" for n in wanted}
     return [c for c in cands if c.ref in refs or any(s in refs for s in c.subs)]
+
+
+def scan_root(cfg: dict, root_name: str) -> list[Candidate]:
+    """Candidates of a library root, for --audit: each direct child, like the source root."""
+    root, rules = cfg["roots"][root_name], _Rules(cfg)
+    top = [n for n in sorted(os.listdir(root)) if not _skip_top(n) and not rules.excluded(f"{root_name}:{n}")]
+    return _attach_sidecars([_candidate(root, n, rules, root_name) for n in top], root, rules)
 
 
 def library_index(cfg: dict) -> dict[str, str]:

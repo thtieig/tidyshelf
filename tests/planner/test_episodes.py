@@ -81,3 +81,14 @@ def test_no_episode_number(cfg):
 
 def test_episode_type():
     assert Episode.__dataclass_fields__.keys() >= {"ref", "season", "episodes", "title", "show", "size"}
+
+
+@pytest.mark.parametrize("name, season, episodes, title", [
+    ("S01E01 - Arrival.mkv", 1, (1,), "Arrival"),
+    ("S01E02-E03 - Two Parter.mkv", 1, (2, 3), "Two Parter"),
+    ("S00E01.mkv", 0, (1,), None),
+    ("S12E104 - A - B.mkv", 12, (104,), "A - B"),
+])
+def test_the_standard_form_reads_back_exactly(cfg, name, season, episodes, title):
+    e = ep(cfg, name)
+    assert (e.season, e.episodes, e.title) == (season, episodes, title)

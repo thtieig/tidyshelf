@@ -10,9 +10,9 @@ from tidyshelf.itemops import (PlanState, Planned, _finish, _real, _video_bytes,
                                dropped_junk, emit_ops, subtitle_timing)
 from tidyshelf.naming import MOVIE_FOLDER_RE, movie_names, safe_name, subtitle_stem
 from tidyshelf.plan import Item, Plan, file_stat
-from tidyshelf.scan import Candidate, library_index, scan_source
+from tidyshelf.scan import Candidate, library_index, scan_root, scan_source
 
-def plan_candidate(cand: Candidate, cfg: dict, state: PlanState) -> Planned:
+def plan_candidate(cand: Candidate, cfg: dict, state: PlanState, kind_hint: str | None = None) -> Planned:
     """One item for one candidate. Its id is set by build_plan()."""
     trace: list[str] = []
     rel = cand.ref.split(":", 1)[1]
@@ -29,7 +29,7 @@ def plan_candidate(cand: Candidate, cfg: dict, state: PlanState) -> Planned:
     name = parse.decide_movie(folder_p, video_ps[0], override, cfg, trace)
     if name.ignore:
         return Planned(_finish(item, [], "skipped"), trace)
-    forced_kind = override.get("kind") if override else None
+    forced_kind = override.get("kind") if override else kind_hint
     markers = any(episodes.has_marker(os.path.basename(v)) for v in cand.videos)  # S1M1: guessit says "movie"
     if forced_kind == "series" or forced_kind is None and (name.kind == "series" or markers
                                                           or any(p.kind == "series" for p in video_ps)):
@@ -63,6 +63,9 @@ def plan_candidate(cand: Candidate, cfg: dict, state: PlanState) -> Planned:
     fm = MOVIE_FOLDER_RE.fullmatch(folder)
     key = (f"{fm['title']} ({fm['year']})" if fm else folder).casefold()  # the name as it will be on disk
     existing = state.library.get(key) or (lib if os.path.lexists(_real(cfg, lib)) else None)
+    if state.audit:  # a library folder does not clash with itself, nor with a tagged edition
+        key = lib.casefold()
+        existing = lib if lib != cand.ref and os.path.lexists(_real(cfg, lib)) else None
     if existing is not None:
         size = file_stat(_real(cfg, cand.videos[0]))[0]
         msg = (f"the library already has {existing} ({_library_quality(cfg, existing)}); "
@@ -99,7 +102,7 @@ def plan_candidate(cand: Candidate, cfg: dict, state: PlanState) -> Planned:
                                code="subtitle.collision"), trace)
     junk = [(ref, "junk") for ref in cand.junk] + dropped_junk(choice)
     created = [lib] + ([subs_dir] if choice.keep else [])
-    emit_ops(item, cand, cfg, state, moves, junk, created, trace)
+    findings += emit_ops(item, cand, cfg, state, moves, junk, created, trace)
     state.claimed[key] = cand.ref
     return Planned(_finish(item, findings + left), trace)
 
@@ -118,20 +121,34 @@ def _library_quality(cfg: dict, lib_ref: str) -> str:
     return f"{_video_bytes(cfg, lib_ref)} bytes of video"
 
 
+def _consistent(item: Item) -> bool:
+    return not item.ops and item.status != "needs_review" and all(f["level"] == "info" for f in item.findings)
+
+
 def build_plan(cfg: dict, paths: list[str] | None = None, created: str | None = None,
-               deep: bool = False) -> tuple[Plan, dict]:
-    """Plan every candidate (or those in `paths`). Returns the plan and a trace per item id."""
+               deep: bool = False, audit: bool = False) -> tuple[Plan, dict]:
+    """Plan every candidate (or those in `paths`); with `audit`, the library folders instead.
+    Returns the plan and a trace per item id."""
+    if audit and paths:
+        raise ValueError("--audit checks whole libraries; it takes no PATH")
     plan, traces, counters = Plan(created), {}, {}
-    state = PlanState(library=library_index(cfg), series_library=series.series_index(cfg), deep=deep)
-    for cand in scan_source(cfg, paths):
+    state = PlanState(library=library_index(cfg), series_library=series.series_index(cfg), deep=deep, audit=audit)
+    cands = ([(c, None) for c in scan_root(cfg, "movies")] + [(c, "series") for c in scan_root(cfg, "series")]
+             if audit else [(c, None) for c in scan_source(cfg, paths)])
+    for cand, hint in cands:
         try:
-            planned = plan_candidate(cand, cfg, state)
+            planned = plan_candidate(cand, cfg, state, hint)
         except OSError as exc:  # e.g. a subtitle that cannot be read: report, keep planning the rest
             what = os.path.basename(exc.filename) if isinstance(exc.filename, str) else "a file"
             item = Item("", "movie", "ready", cand.ref)
             planned = Planned(_finish(item, [], review=f"cannot read {what}: {exc.strerror or exc}",
                                       code="scan.unreadable"), [])
         item = planned.item
+        if audit:
+            if _consistent(item):
+                continue
+            if not item.ops and item.status == "ready":
+                item.status = "skipped"
         counters[item.kind] = counters.get(item.kind, 0) + 1
         item.id = f"{item.kind}-{counters[item.kind]:04}"
         plan.items.append(item)

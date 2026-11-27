@@ -13,6 +13,7 @@ _MARKER = re.compile(r"(?i)(?:^|(?<=[ ._-]))S(\d{1,2})([A-DF-Z])(\d{1,3})(?=[ ._
 _BARE = re.compile(r"(?:^|(?<=[ ._-]))(\d{3})(?=[ ._-]|$)")
 _EXPLICIT = re.compile(r"(?i)S\d{1,3}[ ._-]?E\d|(?:^|[^\d])\d{1,2}x\d{1,3}")
 _SEASON_DIR = re.compile(r"(?i)(?:season|series|staffel|temporada|stagione|saison)[ ._-]*(\d{1,3})|s(\d{1,3})")
+_STANDARD = re.compile(r"S(\d{2,3})E(\d{2,3})(?:-E(\d{2,3}))?(?: - (.+))?")
 _SPECIALS = {"specials", "special", "extras specials"}
 
 
@@ -46,6 +47,10 @@ def season_from_folder(name: str) -> int | None:
 def parse_episode(name: str, ref: str, size: int, folder_season: int | None, cfg: dict,
                   trace: list[str]) -> Episode:
     stem = name.rsplit(".", 1)[0] if "." in name else name
+    std = _STANDARD.fullmatch(stem)
+    if std:  # the form tidyshelf writes: read it back exactly (guessit drops the title)
+        first, last = int(std[2]), int(std[3] or std[2])
+        return Episode(ref, int(std[1]), tuple(range(first, last + 1)), std[4], None, size, folder_season)
     stem = parse.apply_name_rules(stem, cfg, trace)
     marker = _MARKER.search(stem) if not _EXPLICIT.search(stem) else None
     if marker:

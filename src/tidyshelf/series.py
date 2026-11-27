@@ -104,7 +104,8 @@ def plan_series(cand: Candidate, cfg: dict, state: PlanState, trace: list[str], 
     clashes, claimed_by = [], None
     for e in eps:
         season_ref = f"{show_ref}/{_season_dir(cfg, e.season)}"
-        have = _existing_episodes(cfg, season_ref)
+        own = state.audit and (season_ref + "/").startswith(cand.ref + "/")  # auditing: those files are ours
+        have = set() if own else _existing_episodes(cfg, season_ref)
         clashes += [f"S{e.season:02}E{n:02}" for n in e.episodes if (e.season, n) in have]
         for n in e.episodes:
             claimed_by = claimed_by or state.claimed.get(f"{show_ref.casefold()}|{e.season}|{n}")
@@ -171,7 +172,7 @@ def plan_series(cand: Candidate, cfg: dict, state: PlanState, trace: list[str], 
     for season_ref in sorted(set(targets_dir.values())):
         if not os.path.isdir(_real(cfg, season_ref)):
             created.append(season_ref)
-    emit_ops(item, cand, cfg, state, moves, junk, created, trace)
+    findings += emit_ops(item, cand, cfg, state, moves, junk, created, trace)
     for e in eps:
         for n in e.episodes:
             state.claimed[f"{show_ref.casefold()}|{e.season}|{n}"] = cand.ref

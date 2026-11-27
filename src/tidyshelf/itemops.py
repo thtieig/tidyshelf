@@ -24,6 +24,7 @@ class PlanState:
     library: dict[str, str]
     series_library: dict[str, str] = field(default_factory=dict)  # casefold(show folder) -> folder name
     deep: bool = False  # plan --deep: decode every frame
+    audit: bool = False  # plan --audit: candidates are library folders; nothing is deleted there
     quality_unchecked: bool = False  # some video could not be probed (no ffprobe)
     claimed: dict[str, str] = field(default_factory=dict)  # library key -> source ref
     trash_used: set[str] = field(default_factory=set)
@@ -148,9 +149,22 @@ def dropped_junk(choice) -> list[tuple[str, str]]:
     return junk
 
 
+def _not_utf8(ref: str) -> bool:
+    return any("\udc80" <= ch <= "\udcff" for ch in ref)
+
+
 def emit_ops(item: Item, cand, cfg: dict, state: PlanState, moves: list[tuple[str, str]],
-             junk: list[tuple[str, str]], created: list[str], trace: list[str]) -> None:
-    """mkdir, moves, junk (trash or delete), set_mode, then the emptied source folders, deepest first."""
+             junk: list[tuple[str, str]], created: list[str], trace: list[str]) -> list:
+    """mkdir, moves, junk (trash or delete), set_mode, then the emptied source folders, deepest first.
+    Returns findings: names that are not UTF-8, and (audit) library folders left empty."""
+    findings = []
+    staying = [src for src, dst in moves if src == dst]
+    moves = [(src, dst) for src, dst in moves if src != dst]  # already right (audit)
+    created = [c for c in created if not os.path.lexists(_real(cfg, c))]
+    odd = [dst for _src, dst in moves if _not_utf8(dst)] + ([cand.ref] if state.audit and _not_utf8(cand.ref) else [])
+    if odd:
+        findings.append(("warn", "name.not_utf8", f"{odd[0]} contains bytes that are not valid UTF-8; players and "
+                                                   "Samba may show the name wrongly"))
     junk = sorted(junk)
     trash = cfg["junk"]["junk_action"] == "trash"
     trash_moves = [(ref, _trash_target(cfg, ref, state)) for ref, _why in junk] if trash else []
@@ -166,8 +180,14 @@ def emit_ops(item: Item, cand, cfg: dict, state: PlanState, moves: list[tuple[st
     if not trash:
         for ref, why in junk:
             item.delete_file(ref, *file_stat(_real(cfg, ref)), reason=why)
-    left_refs = [r for r, _why in cand.left]
+    keep = [r for r, _why in cand.left] + staying + [dst for _src, dst in moves]
     if cand.is_dir:
         for d in cand.dirs + [cand.ref]:
-            if not any(r == d or r.startswith(d + "/") for r in left_refs):
+            if any(r == d or r.startswith(d + "/") for r in keep):
+                continue
+            if state.audit:  # never delete in a library
+                findings.append(("info", "audit.empty_folder", f"{d} will be empty; remove it by hand "
+                                                                "(tidyshelf never deletes in a library)"))
+            else:
                 item.delete_dir(d, reason="empty")
+    return findings
