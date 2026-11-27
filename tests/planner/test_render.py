@@ -160,3 +160,96 @@ def test_golden_script(lib):
     golden = GOLDEN_SH.read_text(encoding="utf-8")
     strip = lambda t: "\n".join(line for line in t.splitlines() if not line.startswith("# tidyshelf plan"))  # noqa: E731
     assert strip(text) == strip(golden)
+
+
+# --- write op (cleaned subtitles) -------------------------------------------------------------------
+
+AD_SRT = "".join(f"{i}\n00:00:{i:02},000 --> 00:00:{i:02},500\n"
+                 f"{'Visit www.example.com now' if i == 1 else f'Line number {i}.'}\n\n" for i in range(1, 31))
+
+
+def cleaned_film(lib):
+    lib.tree("source", f"{FOLDER}/Winter.Lights.2004.1080p.mkv [100]")
+    lib.write("source", f"{FOLDER}/Winter.Lights.en.srt", AD_SRT.encode())
+
+
+def sub_target(lib):
+    return lib.roots["movies"] / "Winter Lights (2004)" / "Subs" / "Winter Lights (2004).en.srt"
+
+
+def test_text_lists_a_write(lib):
+    cleaned_film(lib)
+    text = to_text(build_plan(lib.cfg)[0].to_dict())
+    assert "write    movies:Winter Lights (2004)/Subs/Winter Lights (2004).en.srt  (cleaned from source:" in text
+    assert "data_b64" not in text
+
+
+def test_script_writes_and_is_rerunnable(lib, tmp_path):
+    cleaned_film(lib)
+    path = script(lib, tmp_path)
+    before = list_tree(lib.nas)
+    r = bash(path)
+    assert r.returncode == 0 and "would: write" in r.stdout and list_tree(lib.nas) == before
+    r = bash(path, "--execute")
+    assert r.returncode == 0, r.stderr
+    text = sub_target(lib).read_text(encoding="utf-8")
+    assert "example.com" not in text and text.startswith("1\n00:00:02,000 --> 00:00:02,500\nLine number 2.\n")
+    assert (lib.roots["source"] / ".tidyshelf-trash" / "source" / FOLDER / "Winter.Lights.en.srt").read_bytes() == AD_SRT.encode()
+    assert not [p for p in sub_target(lib).parent.iterdir() if ".tmp" in p.name]
+    r = bash(path, "--execute")  # again: everything is already done
+    assert r.returncode == 0, r.stderr
+
+
+@pytest.mark.parametrize("change", ["content", "mtime", "gone"])
+def test_script_refuses_a_changed_source(lib, tmp_path, change):
+    cleaned_film(lib)
+    path = script(lib, tmp_path)
+    src = lib.roots["source"] / FOLDER / "Winter.Lights.en.srt"
+    if change == "content":
+        data = src.read_bytes().replace(b"Visit", b"VISIT")
+        mtime = src.stat().st_mtime_ns
+        src.write_bytes(data)
+        os.utime(src, ns=(mtime, mtime))
+    elif change == "mtime":
+        os.utime(src, (1, 1))
+    else:
+        src.unlink()
+    r = bash(path, "--execute")
+    assert r.returncode == 3, r.stderr
+    assert not sub_target(lib).exists()
+
+
+def test_script_never_replaces_an_existing_destination(lib, tmp_path):
+    cleaned_film(lib)
+    path = script(lib, tmp_path)
+    sub_target(lib).parent.mkdir(parents=True)
+    sub_target(lib).write_bytes(b"theirs")
+    r = bash(path, "--execute")
+    assert r.returncode == 3 and "exists" in r.stderr
+    assert sub_target(lib).read_bytes() == b"theirs"
+
+
+def test_script_refuses_data_that_does_not_match_its_hash(lib, tmp_path):
+    cleaned_film(lib)
+    path = script(lib, tmp_path)
+    text = path.read_text()
+    line = next(ln for ln in text.splitlines() if ln.startswith("do_write "))
+    parts = line.split(" ")
+    parts[-1] = "dGFtcGVyZWQ="  # "tampered"
+    path.write_text(text.replace(line, " ".join(parts)))
+    r = bash(path, "--execute")
+    assert r.returncode == 3 and "does not match" in r.stderr
+    assert not sub_target(lib).exists()
+
+
+def test_script_refuses_a_write_outside_the_libraries(lib, tmp_path):
+    cleaned_film(lib)
+    plan, _ = build_plan(lib.cfg)
+    doc = plan.to_dict()
+    for op in doc["items"][0]["ops"]:
+        if op["op"] == "write":
+            op["to"] = "source:elsewhere.srt"
+    path = tmp_path / "plan.sh"
+    path.write_bytes(to_sh(doc, lib.cfg))
+    r = bash(path, "--execute")
+    assert r.returncode == 3 and "movies or series" in r.stderr

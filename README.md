@@ -4,8 +4,9 @@ Tidy a folder of video files in any naming state into a library with one consist
 Kodi/Jellyfin/Plex/Emby-portable naming standard, and check the library you already have against
 it. No AI, no network, no cloud: the same files and the same config always give the same plan.
 
-> **Status:** v0.1. Movies and series: naming, subtitles chosen by their content, quality checks
-> with ffprobe, junk to a trash folder, and an audit of the existing library.
+> **Status:** v0.2. Movies and series: naming, subtitles chosen by their content (ad cues removed and
+> converted to UTF-8 in the `.srt` files kept), quality checks with ffprobe, junk to a trash folder,
+> and an audit of the existing library.
 
 **It moves and can delete files.** Read the plan before applying it. Dry-run is the default.
 Keep backups. See [docs/SAFETY.md](docs/SAFETY.md).

@@ -143,7 +143,32 @@ Subtitles are judged by what is inside them, not by their names:
 6. VobSub pairs (`.idx` + `.sub`) stay together; a lone `.sub` or `.idx` is junk.
 
 Advertising cues at the start or end (`ad_patterns`, plus your own `ad_patterns_extra`) and
-subtitles with very few cues are reported, never edited.
+subtitles with very few cues are reported.
+
+### Cleaning kept `.srt` subtitles
+
+Two settings in `[subtitles]`, both on by default:
+
+- `clean_ads = true`: a kept `.srt` whose first three or last three cues match an ad pattern gets
+  those cues removed. The cues after them are renumbered from 1; timings and text lines are not
+  touched.
+- `to_utf8 = true`: a kept `.srt` in Windows-1252, Windows-1250 or UTF-16 is converted to UTF-8
+  (no BOM). This only happens when the language was recognised from the text, which is what
+  confirms the encoding guess; a file with a byte that means nothing in its encoding is left as it is.
+
+A file that needs neither is moved as before, byte for byte (a UTF-8 file with a BOM and no ad cues
+is left alone too). Only `.srt` is cleaned; `.ass`, `.ssa`, `.vtt` and image subtitles are
+unchanged and only reported. A file that has text outside normal cues is not restructured (its ad
+cues stay reported). Rewritten files use `\n` line endings; a file that is only converted keeps its own.
+`plan --audit` never cleans.
+
+The plan does not edit the original. For such a file it holds a `write` step: the new library file,
+with its exact bytes inside the plan (so approving the plan approves those bytes), and a `move` of
+the original into `.tidyshelf-trash/` (or a delete, with `junk_action = "delete"`). An info finding
+`subtitle.cleaned` says what changed ("2 advertising cues removed, converted from cp1252 to UTF-8").
+At apply time the original must still have the size, time and content it had when planned.
+`tidyshelf undo` moves the written file into the trash (it never deletes in a library) and puts the
+original back, and refuses if the written file has been changed since.
 
 ## Video quality
 
@@ -226,7 +251,8 @@ reading, or for a machine without Python. It keeps the checks shell can do (see 
 has no journal, no rollback and no lock. `--emit text` writes a readable listing.
 
 **Undo:** `tidyshelf undo plan.json` (or `tidyshelf-apply --undo plan.json`) puts moved files back
-and removes folders the run created, if empty; dry-run first, then `--execute`. Deleted files are
+and removes folders the run created, if empty; dry-run first, then `--execute`. A cleaned subtitle
+the run wrote goes to the trash (if unchanged) and its original is put back. Deleted files are
 not restored; with the default `junk_action = "trash"`, junk is in `.tidyshelf-trash/`.
 
 ## Exit codes
@@ -239,6 +265,7 @@ refused, `4` some items need review. With several, the first of 1, 3, 4, 2 wins.
 - *Plex-style names* — later (only the `kodi` preset exists today)
 - *to keep SDH subtitles as well* — `keep_sdh_alongside = true` in `[subtitles]`
 - *SDH rather than plain* — `prefer = "sdh"` in `[subtitles]`
+- *subtitles left exactly as they are* — `clean_ads = false` and `to_utf8 = false` in `[subtitles]`
 - *junk deleted, not trashed* — `junk_action = "delete"` in `[junk]`
 - *to skip a folder* — add a regex to `[exclude] patterns`, e.g. `'^movies:_keep-out(/|$)'`
 - *to fix one item by hand* — an `[[override]]` block (see above)

@@ -124,10 +124,11 @@ def leaves(paths: list[str]) -> list[str]:
     return [p for p in paths if not any(o.startswith(p + "/") for o in paths)]
 
 
-def analyse_subs(cand_subs: list[str], cfg: dict, base_dir: str, trace: list[str], video_name: str | None = None):
+def analyse_subs(cand_subs: list[str], cfg: dict, base_dir: str, trace: list[str], video_name: str | None = None,
+                 clean: bool = True):
     """Analyse and choose the subtitles in `cand_subs`; adds one trace line per file."""
     rel_of = lambda ref: os.path.relpath(_real(cfg, ref), base_dir)  # noqa: E731
-    infos = [subtitles.analyse(_real(cfg, ref), ref, cfg, video_name) for ref in cand_subs]
+    infos = [subtitles.analyse(_real(cfg, ref), ref, cfg, video_name, clean) for ref in cand_subs]
     choice = subtitles.choose(infos, cfg, rel_of)
     kept_refs = {s.ref: (lang, variant) for s, lang, variant in choice.keep}
     for s in infos:
@@ -154,14 +155,20 @@ def _not_utf8(ref: str) -> bool:
 
 
 def emit_ops(item: Item, cand, cfg: dict, state: PlanState, moves: list[tuple[str, str]],
-             junk: list[tuple[str, str]], created: list[str], trace: list[str]) -> list:
-    """mkdir, moves, junk (trash or delete), set_mode, then the emptied source folders, deepest first.
+             junk: list[tuple[str, str]], created: list[str], trace: list[str], cleaned: dict | None = None) -> list:
+    """mkdir, writes, moves, junk (trash or delete), set_mode, then the emptied source folders, deepest first.
+    `cleaned` maps the source ref of a subtitle in `moves` to its SubInfo, whose cleaned content is written
+    to the library instead of moving the file; the original is then junk (trashed, or deleted).
     Returns findings: names that are not UTF-8, and (audit) library folders left empty."""
     findings = []
+    cleaned = cleaned or {}
+    writes = [(src, dst) for src, dst in moves if src in cleaned]
+    moves = [(src, dst) for src, dst in moves if src not in cleaned]
+    junk = list(junk) + [(src, "subtitle cleaned") for src, _dst in writes]
     staying = [src for src, dst in moves if src == dst]
     moves = [(src, dst) for src, dst in moves if src != dst]  # already right (audit)
     created = [c for c in created if not os.path.lexists(_real(cfg, c))]
-    odd = [dst for _src, dst in moves if _not_utf8(dst)] + ([cand.ref] if state.audit and _not_utf8(cand.ref) else [])
+    odd = [dst for _src, dst in moves + writes if _not_utf8(dst)] + ([cand.ref] if state.audit and _not_utf8(cand.ref) else [])
     if odd:
         findings.append(("warn", "name.not_utf8", f"{odd[0]} contains bytes that are not valid UTF-8; players and "
                                                    "Samba may show the name wrongly"))
@@ -172,15 +179,19 @@ def emit_ops(item: Item, cand, cfg: dict, state: PlanState, moves: list[tuple[st
         item.mkdir(path)
     for parent in leaves([to.rsplit("/", 1)[0] for _f, to in trash_moves]):
         item.mkdir(parent)
+    for src, dst in writes:
+        s = cleaned[src]
+        item.write(dst, s.clean.data, src, s.sha256, s.size, s.mtime)
+        trace.append(f"write {dst} (cleaned from {src.split(':', 1)[1]})")
     for src, dst in moves + trash_moves:
         item.move(src, dst, *file_stat(_real(cfg, src)))
         trace.append(f"move {src.split(':', 1)[1]} -> {dst}")
-    for path in created + [to for _f, to in moves]:
+    for path in created + [to for _f, to in writes + moves]:
         item.set_mode(path)
     if not trash:
         for ref, why in junk:
             item.delete_file(ref, *file_stat(_real(cfg, ref)), reason=why)
-    keep = [r for r, _why in cand.left] + staying + [dst for _src, dst in moves]
+    keep = [r for r, _why in cand.left] + staying + [dst for _src, dst in moves + writes]
     if cand.is_dir:
         for d in cand.dirs + [cand.ref]:
             if any(r == d or r.startswith(d + "/") for r in keep):

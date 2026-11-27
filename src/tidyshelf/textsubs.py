@@ -114,3 +114,66 @@ def read_cues(data: bytes, ext: str, encoding: str) -> list[str]:
     """Cue texts of `data` decoded the way detect() chose."""
     codec = "utf-8-sig" if encoding == "utf-8" else encoding
     return cue_texts(data.decode(codec, errors="replace"), ext)
+
+
+@dataclass(frozen=True)
+class Cleaned:
+    data: bytes  # the new file: UTF-8 without BOM
+    ads_removed: int
+    converted_from: str | None  # the encoding it was converted from, when that was not UTF-8
+
+
+_BLOCK_SPLIT = re.compile(r"\r?\n\s*\r?\n")
+
+
+def _srt_blocks(text: str) -> list[list[str]] | None:
+    """Cue blocks as raw lines [timing, text...] (the number line dropped); None if the text is not
+    plain SRT (a block with no timing line, two timing lines, or stray lines before the timing): such
+    a file is never rewritten."""
+    blocks = []
+    for raw in _BLOCK_SPLIT.split(text.strip("\r\n")):
+        lines = raw.splitlines()
+        if not any(ln.strip() for ln in lines):
+            continue
+        timing = [i for i, ln in enumerate(lines) if "-->" in ln]
+        if len(timing) != 1 or timing[0] > 1 or (timing[0] == 1 and not lines[0].strip().isdigit()):
+            return None
+        blocks.append(lines[timing[0]:])
+    return blocks
+
+
+def _cue_text(lines: list[str]) -> str:
+    return _clean(" ".join(ln for ln in lines[1:] if ln.strip()))
+
+
+def clean_srt(data: bytes, encoding: str, patterns: list, clean_ads: bool, to_utf8: bool) -> Cleaned | None:
+    """The cleaned bytes of an .srt, or None when nothing needs to change or it cannot be done safely.
+
+    Ad cues are the ones at the edges (first three and last three cues) whose text matches a pattern,
+    as the analysis reports them. They are dropped and the rest renumbered from 1; timing and text
+    lines are kept as they are, with line endings written as \\n. A file that is not UTF-8 is decoded
+    strictly (a byte with no meaning in the detected encoding means no conversion) and written as UTF-8
+    without a BOM. A UTF-8 file without ad cues is left alone, byte for byte."""
+    codec = "utf-8-sig" if encoding == "utf-8" else encoding
+    try:
+        text = data.decode(codec)
+    except UnicodeDecodeError:
+        return None
+    converted = encoding if (to_utf8 and encoding != "utf-8") else None
+    if encoding != "utf-8" and not to_utf8:
+        return None  # a file that stays in its old encoding is not rewritten at all
+    removed = 0
+    if clean_ads:
+        blocks = _srt_blocks(text)
+        if blocks is not None:
+            texts = [(i, _cue_text(b)) for i, b in enumerate(blocks)]
+            texts = [(i, t) for i, t in texts if t]
+            edges = texts[:3] + texts[3:][-3:]
+            ads = {i for i, t in edges if any(p.search(t) for p in patterns)}
+            if ads and len(ads) < len(blocks):
+                kept = [b for i, b in enumerate(blocks) if i not in ads]
+                text = "\n\n".join("\n".join([str(n)] + b) for n, b in enumerate(kept, 1)) + "\n"
+                removed = len(ads)
+    if not removed and converted is None:
+        return None
+    return Cleaned(text.encode("utf-8"), removed, converted)

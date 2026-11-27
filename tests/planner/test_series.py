@@ -21,7 +21,11 @@ def only(lib, *paths):
 
 
 def moves(item):
-    return {op["from"].rsplit("/", 1)[-1].split(":", 1)[-1]: op["to"] for op in item["ops"] if op["op"] == "move"}
+    """Source file name -> where it ends up: a move's target, or (for a cleaned subtitle, whose original is
+    trashed) the library file written from it."""
+    out = {op["from"].rsplit("/", 1)[-1].split(":", 1)[-1]: op["to"] for op in item["ops"] if op["op"] == "move"}
+    out.update({op["src"].rsplit("/", 1)[-1]: op["to"] for op in item["ops"] if op["op"] == "write"})
+    return out
 
 
 def codes(item):

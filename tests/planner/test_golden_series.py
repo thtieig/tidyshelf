@@ -34,12 +34,16 @@ def test_golden_series(lib):
     pack, coast = plan.to_dict()["items"]
     assert (pack["id"], pack["status"], coast["id"], coast["status"]) == ("series-0001", "ready", "series-0002", "ready")
     moves = {op["from"].rsplit("/", 1)[-1]: op["to"] for op in pack["ops"] if op["op"] == "move"}
+    # The SDH subtitle has an ad cue and the Spanish one is cp1252: both are written as cleaned copies.
+    writes = {op["to"]: op["src"] for op in pack["ops"] if op["op"] == "write"}
+    assert writes == {f"{S1}/S01E02 - The Storm.en.sdh.srt": f"source:{PACK}/Subs/Harbour.Lights.S01E02.eng.srt",
+                      f"{S1}/S01E02 - The Storm.es.srt": f"source:{PACK}/Subs/Harbour.Lights.S01E02.spa.srt"}
+    for original in ("Harbour.Lights.S01E02.eng.srt", "Harbour.Lights.S01E02.spa.srt"):
+        assert moves[original].startswith("source:.tidyshelf-trash/source/")
     assert moves["Harbour.Lights.S01E01.Pilot.720p.mkv"] == f"{S1}/S01E01 - Pilot.mkv"
     assert moves["Harbour.Lights.S01E02.The.Storm.720p.mkv"] == f"{S1}/S01E02 - The Storm.mkv"
     assert moves["Harbour.Lights.S01E03E04.Two.Parter.720p.mkv"] == f"{S1}/S01E03-E04 - Two Parter.mkv"
     assert moves["Harbour.Lights.S01E01.eng.srt"] == f"{S1}/S01E01 - Pilot.en.srt"
-    assert moves["Harbour.Lights.S01E02.eng.srt"] == f"{S1}/S01E02 - The Storm.en.sdh.srt"
-    assert moves["Harbour.Lights.S01E02.spa.srt"] == f"{S1}/S01E02 - The Storm.es.srt"
     assert moves["info.nfo"].startswith("source:.tidyshelf-trash/source/")
     assert "making-of.mkv" not in moves
     assert [op["path"] for op in pack["ops"] if op["op"] == "delete"] == [f"source:{PACK}/Subs"]  # Featurettes stays

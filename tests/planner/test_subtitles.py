@@ -146,11 +146,22 @@ def test_claim_used_when_text_is_too_short(cfg, put):
     assert ("movie.es.srt", "es", None) in kept(c)
 
 
-def test_ad_cue_reported_not_removed(cfg, put):
+def test_ad_cue_reported_not_removed_when_cleaning_is_off(cfg, put):
+    cfg["subtitles"]["clean_ads"] = False
     before = (SUBS / "en_sdh.srt").read_bytes()
     s = put("movie.en.srt", "en_sdh.srt")
     c = choose([s], cfg, rel)
-    assert "subtitle.ad_cues" in codes(c)
+    assert "subtitle.ad_cues" in codes(c) and "subtitle.cleaned" not in codes(c)
+    assert s.clean is None
+    assert Path(s.path).read_bytes() == before
+
+
+def test_ad_cue_is_cleaned_by_default_and_the_file_itself_is_untouched(cfg, put):
+    before = (SUBS / "en_sdh.srt").read_bytes()
+    s = put("movie.en.srt", "en_sdh.srt")
+    c = choose([s], cfg, rel)
+    assert "subtitle.cleaned" in codes(c) and "subtitle.ad_cues" not in codes(c)
+    assert s.clean.ads_removed == 1 and s.clean.converted_from is None
     assert Path(s.path).read_bytes() == before
 
 

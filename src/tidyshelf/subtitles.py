@@ -10,6 +10,7 @@ from typing import Callable
 
 import babelfish
 
+import tidyshelf_apply
 from tidyshelf import textsubs
 from tidyshelf.textsubs import READ_LIMIT, Detection
 
@@ -60,6 +61,7 @@ class SubInfo:
     ad_cues: list[str] = field(default_factory=list)
     pair: str | None = None  # for an .idx: ref of its .sub, set by choose()
     last_cue: float | None = None  # seconds at which the last cue ends
+    clean: textsubs.Cleaned | None = None  # the cleaned .srt that replaces this file, if any
 
 
 @dataclass
@@ -100,8 +102,9 @@ def _head(path: str, size: int) -> bytes:
         return fh.read(size)
 
 
-def analyse(path: str, ref: str, cfg: dict, video_name: str | None = None) -> SubInfo:
-    """Read one subtitle file (bounded) and describe it. Never changes the file."""
+def analyse(path: str, ref: str, cfg: dict, video_name: str | None = None, clean: bool = True) -> SubInfo:
+    """Read one subtitle file (bounded) and describe it. Never changes the file.
+    With `clean`, an .srt that has ad cues or is not UTF-8 also gets its cleaned content (`SubInfo.clean`)."""
     subs = cfg["subtitles"]
     st = os.lstat(path)
     name = os.path.basename(path)
@@ -132,9 +135,17 @@ def analyse(path: str, ref: str, cfg: dict, video_name: str | None = None) -> Su
     patterns = [re.compile(p) for p in subs["ad_patterns"] + subs["ad_patterns_extra"]]
     edges = cues[:3] + cues[3:][-3:]
     ad_cues = [c for c in edges if any(p.search(c) for p in patterns)]
+    cleaned = None
+    if clean and ext == ".srt" and detection is not None and len(data) <= READ_LIMIT:
+        # a non-UTF-8 file is only converted when its language was recognised: that is what proves the
+        # encoding guess (a wrong one would turn readable text into garbage)
+        convert = subs["to_utf8"] and (detection.encoding == "utf-8" or detection.lang is not None)
+        cleaned = textsubs.clean_srt(data, detection.encoding, patterns, subs["clean_ads"], convert)
+        if cleaned is not None and len(cleaned.data) > tidyshelf_apply.MAX_WRITE_BYTES:
+            cleaned = None
     return SubInfo(ref=ref, path=path, ext=ext, size=st.st_size, mtime=st.st_mtime_ns // 10**9,
                    sha256=_hash(path), claimed=claimed, detection=detection, variant=variant,
-                   cues=len(cues), ad_cues=ad_cues, last_cue=last_cue)
+                   cues=len(cues), ad_cues=ad_cues, last_cue=last_cue, clean=cleaned)
 
 
 def _rank(sub: SubInfo):
@@ -219,9 +230,17 @@ def choose(subs: list[SubInfo], cfg: dict, rel_of: Callable[[str], str]) -> Choi
             else:
                 out.drop.append((s, "not_preferred"))
     for s, _lang, _variant in out.keep:  # 7. reports on what is kept
-        if s.ad_cues:
+        if s.clean is not None:
+            what = ([f"{s.clean.ads_removed} advertising cue{'s' * (s.clean.ads_removed != 1)} removed"]
+                    if s.clean.ads_removed else []) + (
+                [f"converted from {s.clean.converted_from} to UTF-8"] if s.clean.converted_from else [])
+            out.findings.append(("info", "subtitle.cleaned", f"{rel_of(s.ref)}: {', '.join(what)}"))
+        if s.ad_cues and not (s.clean is not None and s.clean.ads_removed):
             out.findings.append(("warn", "subtitle.ad_cues",
                                  f"{rel_of(s.ref)} has advertising cues (reported, not removed): {s.ad_cues[0]!r}"))
+        if s.clean is None and s.detection is not None and s.detection.encoding != "utf-8":
+            out.findings.append(("info", "subtitle.not_utf8",
+                                 f"{rel_of(s.ref)} is not UTF-8 ({s.detection.encoding}); kept as it is"))
         if s.ext in TEXT_EXTS and s.cues < MIN_CUES:
             out.findings.append(("warn", "subtitle.few_cues", f"{rel_of(s.ref)} has only {s.cues} cues"))
         if s.ext == ".idx":

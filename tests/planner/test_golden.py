@@ -5,6 +5,7 @@ an advertising cue, and a readme. Explicit assertions first, so a wrong golden f
 blessed by regenerating it; then the whole plan against the stored copy.
 """
 
+import base64
 import json
 from pathlib import Path
 
@@ -36,13 +37,23 @@ def test_golden_winter_lights(lib):
     assert item["status"] == "ready"
     moves = {op["from"].split("/")[-1]: op["to"] for op in item["ops"] if op["op"] == "move"}
     assert moves[f"{VIDEO}.mp4"] == "movies:Winter Lights (2004)/Winter Lights (2004).mp4"
-    assert moves["English SDH.eng.srt"] == "movies:Winter Lights (2004)/Subs/Winter Lights (2004).en.sdh.srt"
-    assert moves["Spanish.spa.srt"] == "movies:Winter Lights (2004)/Subs/Winter Lights (2004).es.srt"
-    for junk in ("English.eng.srt", f"{VIDEO}.srt", "readme.txt"):
+    # The SDH subtitle has an ad cue and the Spanish one is cp1252: both are written as cleaned copies.
+    writes = {op["to"]: op for op in item["ops"] if op["op"] == "write"}
+    assert sorted(writes) == ["movies:Winter Lights (2004)/Subs/Winter Lights (2004).en.sdh.srt",
+                              "movies:Winter Lights (2004)/Subs/Winter Lights (2004).es.srt"]
+    write = writes["movies:Winter Lights (2004)/Subs/Winter Lights (2004).en.sdh.srt"]
+    spanish = base64.b64decode(writes["movies:Winter Lights (2004)/Subs/Winter Lights (2004).es.srt"]["data_b64"])
+    assert spanish.decode("utf-8").startswith("1\n00:00:03,000 --> 00:00:05,500\n¿Dónde estabas anoche?")
+    assert write["src"].endswith("/Subs/English SDH.eng.srt")
+    cleaned = base64.b64decode(write["data_b64"]).decode("utf-8")
+    assert "www.example.com" not in cleaned and cleaned.startswith("1\n") and cleaned.endswith("\n")
+    assert len(cleaned.split("\n\n")) == 38  # 39 cues, the last was the ad
+    for junk in ("English.eng.srt", f"{VIDEO}.srt", "readme.txt", "English SDH.eng.srt", "Spanish.spa.srt"):
         assert moves[junk].startswith("source:.tidyshelf-trash/source/"), junk
-    assert len(moves) == 6
+    assert len(moves) == 6  # the video and five trashed originals: nothing else moves
     codes = {f["code"] for f in item["findings"]}
-    assert {"subtitle.language_mismatch", "subtitle.duplicate", "subtitle.dropped_language", "subtitle.ad_cues"} <= codes
+    assert {"subtitle.language_mismatch", "subtitle.duplicate", "subtitle.dropped_language", "subtitle.cleaned"} <= codes
+    assert "subtitle.ad_cues" not in codes
     (mismatch,) = [f["msg"] for f in item["findings"] if f["code"] == "subtitle.language_mismatch"]
     assert mismatch.startswith("Subs/English.eng.srt is labelled en (English) but its text is ro (Romanian) (confidence 0.9")
     assert [op["path"] for op in item["ops"] if op["op"] == "delete"] == [f"source:{FOLDER}/Subs", f"source:{FOLDER}"]
