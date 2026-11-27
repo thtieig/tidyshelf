@@ -51,13 +51,18 @@ def _is_junk(title: str, junk: set[str]) -> bool:
     return not tokens or all(t in junk for t in tokens) or bool(_DOMAIN.fullmatch(title.strip()))
 
 
-def parse_name(name: str, cfg: dict, trace: list[str]) -> Parsed:
-    """Parse one folder or file name. Every step that changes something adds a line to `trace`."""
+def apply_name_rules(name: str, cfg: dict, trace: list[str]) -> str:
     for rule in cfg["parse"]["name_rules"]:
         new = re.sub(rule["match"], rule["replace"], name)
         if new != name:
             trace.append(f"name rule {rule['match']!r}: {name!r} -> {new!r}")
             name = new
+    return name
+
+
+def parse_name(name: str, cfg: dict, trace: list[str]) -> Parsed:
+    """Parse one folder or file name. Every step that changes something adds a line to `trace`."""
+    name = apply_name_rules(name, cfg, trace)
     guess = guessit(name)
     title = guess.get("title")
     title = title if isinstance(title, str) else None
