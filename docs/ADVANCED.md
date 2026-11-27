@@ -94,8 +94,15 @@ files (`S01E23-E24`, `S03E16E17`, `1x08-09` all become `S01E23-E24`).
   needs review.
 - Markers like `S1M1`, `S1M2` are numbered E01, E02, ... in their order (reported).
 - Names: `Series/<Show>/Season <N>/S01E02 - Title.ext` (`[naming] season_folder`, `episode_file`,
-  `specials_folder`); the episode title is kept when the name has one. An existing show folder in
-  the library (also `Show (Year)`) is reused, so new episodes join it.
+  `specials_folder`); the episode title is kept when the name has one, also when the name starts
+  with the number (`304 The Burglary.mkv` -> `S03E04 - The Burglary.mkv`).
+- A new show folder is `Title (Year) [TAG]`: the year when the source name has one, and bracket tags
+  as for movies (a name already shaped like `Show [ITA]` keeps its tags; any other name keeps only
+  language tags such as `[ITA]`).
+- An existing show in the library is reused, so new episodes join it: `Show [ITA]` or `Show (2015)`
+  is found from a name without the tag or year. A year or tag on both sides must agree. When several
+  library shows fit, the item needs review; name the source with its year or tag, or use an
+  `[[override]]` title such as `"Show [ITA]"`.
 - Subtitles go next to their episode (`S01E02 - Title.en.srt`). A subtitle belongs to the episode
   with the same numbers in its name, or the video whose name it starts with; a subtitle that matches
   no episode goes to the trash.

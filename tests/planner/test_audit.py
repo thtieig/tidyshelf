@@ -115,3 +115,22 @@ def test_audited_show_does_not_join_itself(lib):
     lib.tree("series", "Harbour Lights/Season 1/Harbour.Lights.S01E01.mkv")
     (item,) = audit(lib)
     assert "series.joins_existing" not in codes(item)
+
+
+def test_tagged_and_dated_shows_audit_clean(lib):
+    lib.tree("series", "Mountain Girl [ITA]/Season 1/S01E01 - Il Pranzo.mkv\n"
+                       "Mountain Girl/Season 1/S01E01.mkv\nPier Lane (2011)/Season 2/S02E01.mkv")
+    assert audit(lib) == []
+
+
+def test_number_first_episode_in_a_library_show_keeps_its_title(lib):
+    lib.tree("series", "Mountain Girl [ITA]/Season 1/070 La teoria di Alvaro.mkv")
+    (item,) = audit(lib)
+    assert moves(item) == {"series:Mountain Girl [ITA]/Season 1/070 La teoria di Alvaro.mkv":
+                           "series:Mountain Girl [ITA]/Season 1/S01E70 - La teoria di Alvaro.mkv"}
+
+
+def test_misnamed_dated_show_folder_is_renamed_with_its_year(lib):
+    lib.tree("series", "Pier.Lane.2011/Season 2/S02E01.mkv")
+    (item,) = audit(lib)
+    assert moves(item) == {"series:Pier.Lane.2011/Season 2/S02E01.mkv": "series:Pier Lane (2011)/Season 2/S02E01.mkv"}

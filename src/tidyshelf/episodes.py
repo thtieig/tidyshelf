@@ -15,6 +15,10 @@ _EXPLICIT = re.compile(r"(?i)S\d{1,3}[ ._-]?E\d|(?:^|[^\d])\d{1,2}x\d{1,3}")
 _SEASON_DIR = re.compile(r"(?i)(?:season|series|staffel|temporada|stagione|saison)[ ._-]*(\d{1,3})|s(\d{1,3})")
 _STANDARD = re.compile(r"S(\d{2,3})E(\d{2,3})(?:-E(\d{2,3}))?(?: - (.+))?")
 _SPECIALS = {"specials", "special", "extras specials"}
+# A name that starts with its episode number ("304 The Burglary", "3x05 The Ledger", "S03E06.Title"):
+# guessit reads the text after it as the show title, but it is the episode's title.
+_LEADING = re.compile(r"(?i)(?:S\d{1,3}[ ._-]?E\d{1,3}(?:-?E\d{1,3})*|\d{1,2}x\d{1,3}(?:-\d{1,3})?|\d{2,3})[ ._-]+")
+_WORDS = re.compile(r"[\s._-]+")
 
 
 @dataclass
@@ -28,6 +32,7 @@ class Episode:
     folder_season: int | None = None  # from the season folder the file sits in
     marker: int | None = None  # S1M1-style marker number
     bare: str | None = None  # a bare 3-digit number as written ("102", "096")
+    year: int | None = None  # the show's year, as read from this file's name
 
 
 def has_marker(name: str) -> bool:
@@ -61,8 +66,17 @@ def parse_episode(name: str, ref: str, size: int, folder_season: int | None, cfg
                        folder_season, marker=int(marker[3]))
     p = parse.parse_name(name, cfg, trace)
     bare = _BARE.search(stem) if not _EXPLICIT.search(stem) else None
-    return Episode(ref, p.season, p.episodes, p.episode_title, p.title, size, folder_season,
-                   bare=bare[1] if bare else None)
+    show, episode_title = p.title, p.episode_title
+    lead = _LEADING.match(stem)
+    if lead and show and episode_title is None and _words(stem[lead.end():]).startswith(_words(show)):
+        trace.append(f"{name!r} starts with its number: {show!r} is the episode title")
+        show, episode_title = None, show
+    return Episode(ref, p.season, p.episodes, episode_title, show, size, folder_season,
+                   bare=bare[1] if bare else None, year=p.year if show else None)
+
+
+def _words(text: str) -> str:
+    return " ".join(_WORDS.split(text.casefold())).strip()
 
 
 def resolve_numbering(eps: list[Episode], default_season: int | None) -> tuple[list[Episode], list, str | None]:

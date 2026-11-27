@@ -22,7 +22,7 @@ REVIEW_CODES = {
 class PlanState:
     """What earlier items of the same plan already took."""
     library: dict[str, str]
-    series_library: dict[str, str] = field(default_factory=dict)  # casefold(show folder) -> folder name
+    series_library: dict = field(default_factory=dict)  # series.series_index: show title -> library shows
     deep: bool = False  # plan --deep: decode every frame
     audit: bool = False  # plan --audit: candidates are library folders; nothing is deleted there
     quality_unchecked: bool = False  # some video could not be probed (no ffprobe)

@@ -6,6 +6,9 @@ import os
 import re
 import stat
 from collections import Counter
+from dataclasses import dataclass
+
+from guessit import guessit
 
 from tidyshelf import parse
 from tidyshelf.episodes import Episode, parse_episode, resolve_numbering, season_from_folder
@@ -16,17 +19,69 @@ from tidyshelf.plan import Item, file_stat
 from tidyshelf.scan import Candidate
 
 _HAVE = re.compile(r"(?i)S(\d{1,3})E(\d{1,3})(?:-?E(\d{1,3}))?")
-_YEAR_SUFFIX = re.compile(r" \(\d{4}\)$")
+# A show folder: "<Title>", "<Title> (<Year>)", either followed by bracket tags ("[ITA]").
+_SHOW_NAME = re.compile(r"(?P<title>\S.*?)(?: \((?P<year>\d{4})\))?(?P<tags>(?: \[[^\]]+\])*)")
+_TAG = re.compile(r"\[([^\]]+)\]")
 
 
-def series_index(cfg: dict) -> dict[str, str]:
-    """casefold(show folder) -> folder name, also keyed without a trailing " (Year)"."""
+@dataclass(frozen=True)
+class Show:
+    name: str  # the folder name
+    year: int | None
+    tags: tuple[str, ...]  # casefolded
+
+
+def _show(name: str) -> tuple[str, Show]:
+    m = _SHOW_NAME.fullmatch(name)
+    return m["title"].casefold(), Show(name, int(m["year"]) if m["year"] else None,
+                                       tuple(t.casefold() for t in _TAG.findall(m["tags"])))
+
+
+def series_index(cfg: dict) -> dict[str, list[Show]]:
+    """casefold(show title without year and tags) -> the library's show folders with that title."""
     root, index = cfg["roots"]["series"], {}
     for name in sorted(os.listdir(root)):
         if stat.S_ISDIR(os.lstat(os.path.join(root, name)).st_mode):
-            index.setdefault(name.casefold(), name)
-            index.setdefault(_YEAR_SUFFIX.sub("", name).casefold(), name)
+            key, show = _show(name)
+            index.setdefault(key, []).append(show)
     return index
+
+
+def find_show(index: dict[str, list[Show]], title: str, year: int | None,
+              tags: list[str]) -> tuple[str | None, list[str]]:
+    """The library folder for this show: (folder, []) or, when several fit, (None, their names).
+    A year or a tag on only one side is no reason to differ; on both sides they must agree."""
+    key, written = _show(safe_name(title))  # an [[override]] title may carry its own year or tags
+    year = year if year is not None else written.year
+    want = tuple(t.casefold() for t in tags) or written.tags
+    fits = [s for s in index.get(key, [])
+            if (year is None or s.year is None or s.year == year) and (not want or not s.tags or s.tags == want)]
+    exact = [s for s in fits if (s.year, s.tags) == (year, want)]
+    if exact or len(fits) == 1:
+        return (exact or fits)[0].name, []
+    return None, sorted(s.name for s in fits)
+
+
+def _is_language(tag: str) -> bool:
+    guess = guessit(f"Show [{tag}]")
+    return bool(guess.get("language") or guess.get("subtitle_language"))
+
+
+def show_tags(name: str, title: str, cfg: dict) -> list[str]:
+    """Bracket tags of a source name to keep in the show folder. A name already shaped like a show
+    folder ("<Title> [ITA]", "<Title> (<Year>) [Studio Cut]") keeps its tags as they are, as a movie
+    folder does; any other name keeps only its language tags ("Show.[ITA].S01" -> "[ITA]")."""
+    junk = {t.casefold() for t in cfg["parse"]["junk_tokens"] + cfg["parse"]["extra_tokens"]}
+    m = _SHOW_NAME.fullmatch(name)
+    if m and m["tags"] and m["title"].casefold() == title.casefold():
+        tags = _TAG.findall(m["tags"])
+        if not any(w in junk for t in tags for w in re.split(r"[\s._-]+", t.casefold()) if w):
+            return tags
+    return [t for t in _TAG.findall(name) if _is_language(t)]
+
+
+def show_folder(title: str, year: int | None, tags: list[str]) -> str:
+    return safe_name(title + (f" ({year})" if year else "") + "".join(f" [{t}]" for t in tags))
 
 
 def _existing_episodes(cfg: dict, season_ref: str) -> set[tuple[int, int]]:
@@ -84,17 +139,30 @@ def plan_series(cand: Candidate, cfg: dict, state: PlanState, trace: list[str], 
     qfindings, qreview, probes = check_quality([e.ref for e in eps], cfg, state, trace)
     findings += qfindings
 
-    # The show.
+    # The show: title, year and tags from the name the title comes from (folder, else the files).
     title = (override or {}).get("title") or (folder_p.title if folder_p and folder_p.title else None)
     if title is None:
         shows = Counter(e.show for e in eps if e.show)
         title = shows.most_common(1)[0][0] if shows else None
     if not title or not safe_name(title):
         return review("no show title found", "parse.no_title")
-    year = folder_p.year if folder_p else None
+    same = [e for e in eps if e.show and e.show.casefold() == title.casefold()]
+    year = (override or {}).get("year") or (folder_p.year if folder_p else None)
+    if year is None:
+        years = {e.year for e in same}
+        year = years.pop() if len(years) == 1 else None
+    folder_name = os.path.basename(cand.path)
+    if folder_p is not None and folder_p.title and not (override or {}).get("title"):
+        tags = show_tags(folder_name, title, cfg)
+    else:
+        file_tags = {tuple(show_tags(os.path.splitext(e.ref.rsplit("/", 1)[-1])[0], title, cfg)) for e in same}
+        tags = list(file_tags.pop()) if len(file_tags) == 1 else []
     index = state.series_library
-    show = (index.get(f"{title} ({year})".casefold()) if year else None) or index.get(safe_name(title).casefold()) \
-        or safe_name(title)
+    show, several = find_show(index, title, year, tags)
+    if several:
+        return review(f"several library shows fit {title!r}: {', '.join(several)}; name the show folder "
+                      "with its year or tag, or set it with an [[override]]", "series.ambiguous_show")
+    show = show or show_folder(title, year, tags)
     show_ref = f"series:{show}"
     if os.path.isdir(_real(cfg, show_ref)) and not (state.audit and show_ref == cand.ref):
         findings.append(("info", "series.joins_existing", f"joins the existing {show_ref} in the library"))
@@ -176,4 +244,7 @@ def plan_series(cand: Candidate, cfg: dict, state: PlanState, trace: list[str], 
     for e in eps:
         for n in e.episodes:
             state.claimed[f"{show_ref.casefold()}|{e.season}|{n}"] = cand.ref
+    key, new = _show(show)
+    if new not in index.get(key, []):  # later items of this plan join the show this one creates
+        index.setdefault(key, []).append(new)
     return Planned(_finish(item, findings + left), trace)

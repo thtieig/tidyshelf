@@ -83,3 +83,12 @@ def test_run_out_dash_is_refused(lib, capsys):
     film(lib)
     code, _out, err = run(lib, capsys, "run", "--out", "-")
     assert code == 1 and "file" in err and not Path("-").exists()
+
+
+def test_two_items_of_one_new_show_apply_into_one_folder(lib, capsys):
+    lib.tree("source", "Glen (2015)/S01E01 - Pilot.mkv [10]\nGlen.S01E02.The.Fair.mkv [10]")
+    code, _out, err = run(lib, capsys, "run", "--execute", "--yes")
+    assert code == 0, err
+    assert sorted(p.name for p in lib.roots["series"].iterdir()) == ["Glen (2015)"]
+    assert sorted(p.name for p in (lib.roots["series"] / "Glen (2015)" / "Season 1").iterdir()) == [
+        "S01E01 - Pilot.mkv", "S01E02 - The Fair.mkv"]

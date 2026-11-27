@@ -23,6 +23,7 @@ Series/<Show>/Season 00/          specials
 Series/<Show>/Featurettes/        extras, left untouched
 ```
 
+- Show folder: `<Title>`, plus ` (<Year>)` when the source name has a year, plus bracket tags (`[ITA]`) kept as for movies. An existing library show with the same title is reused when its year and tags don't contradict the source (`Show [ITA]` takes a new `Show` episode); never a second folder for the same show.
 - Season folder: no zero padding (`Season 1`, `Season 11`), always with a space.
 - Filename: `S<NN>E<NN>`, two digits each, whatever the folder padding is.
 - No show name in the episode filename. Players take the show from the folder and the numbers from `SxxEyy`.

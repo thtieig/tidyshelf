@@ -22,3 +22,6 @@ series/Old Coast/Featurettes/making-of.mkv
 series/Harbour Lights (2019)/Season 11/S11E10 - Late Tide.mkv
 series/Harbour Lights (2019)/Season 11/S11E10 - Late Tide.es.srt
 series/Quiet Street/Season 2/S02E01.mkv
+series/Nonna Rosa [ITA]/Season 1/S01E70 - La teoria di Alvaro.mkv
+series/Pine and Willow (2015) [ITA]/Season 2/S02E01 - The Burglary.mkv
+series/Pine and Willow/Season 1/S01E01.mkv
