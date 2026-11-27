@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 import tidyshelf_apply
-from tidyshelf import __version__, config, movies, render
+from tidyshelf import __version__, config, movies, pyz, render
 
 INIT_TEMPLATE = """\
 # tidyshelf config. Only the three folders below are needed; every other setting has a default.
@@ -103,6 +103,10 @@ def build_parser() -> argparse.ArgumentParser:
     p_undo.add_argument("plan", metavar="PLAN", help="the plan file that was applied (its journal is next to it)")
     p_undo.add_argument("--execute", action="store_true", help="really do it (default: dry-run)")
     p_undo.add_argument("--yes", action="store_true", help="do not ask for the typed confirmation")
+
+    p_build = sub.add_parser("build-apply", help="write tidyshelf-apply.pyz, the one-file executor for the NAS")
+    _common(p_build, top=False)
+    p_build.add_argument("--out", metavar="FILE", default="tidyshelf-apply.pyz", help="(default: %(default)s)")
 
     p_explain = sub.add_parser("explain", help="show why one item is planned the way it is")
     _common(p_explain, top=False)
@@ -346,6 +350,10 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_plan(args, out)
     if args.command == "explain":
         return cmd_explain(args, out)
+    if args.command == "build-apply":
+        target = pyz.build(Path(args.out))
+        out.info(f"wrote {target}; copy it to the NAS and run: python3 {target.name} plan.json")
+        return 0
     if args.command == "run":
         return cmd_run(args, out)
     if args.command == "undo":
