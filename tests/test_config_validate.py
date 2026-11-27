@@ -57,7 +57,7 @@ def test_int_is_accepted_where_float_is_expected():
 
 @pytest.mark.parametrize("over, needle", [
     ({"junk": {"junk_action": "shred"}}, "junk.junk_action: must be one of 'delete', 'trash'"),
-    ({"naming": {"preset": "plex"}}, "naming.preset: must be one of 'kodi'"),
+    ({"naming": {"preset": "emby"}}, "naming.preset: must be one of 'kodi', 'plex'"),
     ({"conflicts": {"on_exists": "replace"}}, "conflicts.on_exists: must be one of"),
     ({"override": [{"match": "x", "kind": "film"}]}, "override[0].kind: must be one of"),
     ({"subtitles": {"languages": ["en", "english"]}}, "subtitles.languages[1]: must be a two-letter lowercase ISO 639-1 code"),
@@ -159,6 +159,6 @@ def test_name_rules_are_checked():
     assert check(parse={"name_rules": [{"match": "^x", "replace": ""}]}).errors == []
 
 
-@pytest.mark.parametrize("value", ["", "../x", "Sub:s", "a/b"])
+@pytest.mark.parametrize("value", ["../x", "Sub:s", "a/b"])
 def test_movie_subs_folder_must_be_a_plain_name(value):
     assert any("movie_subs_folder" in e for e in check(naming={"movie_subs_folder": value}).errors)

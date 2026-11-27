@@ -1,7 +1,7 @@
 # tidyshelf
 
 Tidy a folder of video files in any naming state into a library with one consistent,
-Kodi/Jellyfin/Plex/Emby-portable naming standard, and check the library you already have against
+Kodi/Jellyfin/Plex/Emby-portable naming standard (or the Plex layout, with the plex preset), and check the library you already have against
 it. No AI, no network, no cloud: the same files and the same config always give the same plan.
 
 > **Status:** v0.2. Movies and series: naming, subtitles chosen by their content (ad cues removed and
