@@ -49,6 +49,13 @@ one that has both; a disagreement is reported. A "title" made only of release wo
 `tidyshelf explain PATH` prints every step: what guessit read, which rules hit, what each
 subtitle turned out to be, and the resulting operations.
 
+**Findings and `--verbose`.** Every item carries findings (`info`, `warn`, `error`). The text
+output of `plan` and `run` (and `tidyshelf-apply` dry-runs) shows only `warn` and `error`, and one
+line such as `(12 info findings hidden; --verbose to show)` when info findings were left out. Add
+`--verbose` (`-v`, valid before or after the command) to see all of them. `explain`, `--json` and
+the plan file always contain every finding. Subtitle findings name a language as its ISO 639-1
+code, then the name when known: `is nl (Dutch)`, or just `is ar` for a language without a name.
+
 ### Fixing names with rules and overrides
 
 Name rules change each folder and file name *before* it is read, in order (Python regex, `\1`

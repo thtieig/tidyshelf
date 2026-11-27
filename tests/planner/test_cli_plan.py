@@ -157,3 +157,62 @@ def test_series_plan_then_apply_end_to_end(lib, capsys, tmp_path):
     assert sorted(p.name for p in season.iterdir()) == ["S01E01 - Pilot.mkv", "S01E02.mkv"]
     code, out, _err = run(lib, capsys, "plan")
     assert code == 0 and "0 items" in out
+
+
+def many_subs_film(lib):
+    lib.write("source", f"{FOLDER}/Winter.Lights.2004.1080p.mkv", b"v" * 100)
+    for i, name in enumerate(("Dutch.dut", "Arabic.ara", "Croatian.hrv", "Polish.pol")):
+        lib.write("source", f"{FOLDER}/Subs/{name}.srt", (SUBS / "hr.srt").read_bytes() + b"\n" * i)
+    lib.write("source", f"{FOLDER}/Subs/English.eng.srt", (SUBS / "en_plain.srt").read_bytes())
+
+
+def test_plan_text_hides_info_findings_by_default(lib, capsys):
+    many_subs_film(lib)
+    code, out, err = run(lib, capsys, "plan")
+    assert code == 2, err
+    assert "info:" not in out
+    assert "    (" in out and "info findings hidden; --verbose to show)" in out
+
+
+def test_plan_verbose_shows_every_finding(lib, capsys):
+    many_subs_film(lib)
+    for flag in ("--verbose", "-v"):
+        code, out, err = run(lib, capsys, "plan", flag)
+        assert code == 2, err
+        assert "info: subtitle.dropped_language: Subs/Dutch.dut.srt is nl (Dutch) (not in subtitles.languages)" in out
+        assert "hidden" not in out
+
+
+def test_global_verbose_before_the_command(lib, capsys):
+    many_subs_film(lib)
+    _code, out, _err = run(lib, capsys, "-v", "plan")
+    assert "info: subtitle.dropped_language" in out
+
+
+def test_warn_and_error_stay_visible_and_one_info_is_singular(lib, capsys):
+    item = {"id": "movie-0001", "status": "ready", "source": "source:A", "ops": [], "findings": [
+        {"level": "warn", "code": "a.b", "msg": "careful"}, {"level": "info", "code": "c.d", "msg": "fyi"}]}
+    assert cli._summary_lines([item], "abc", None, verbose=False)[1:3] == [
+        "    warn: a.b: careful", "    (1 info finding hidden; --verbose to show)"]
+    assert "    info: c.d: fyi" in cli._summary_lines([item], "abc", None, verbose=True)
+
+
+def test_plan_json_keeps_all_findings(lib, capsys):
+    many_subs_film(lib)
+    code, out, err = run(lib, capsys, "plan", "--json")
+    (item,) = json.loads(out)["items"]
+    assert sum(f["level"] == "info" for f in item["findings"]) >= 4
+
+
+def test_explain_shows_everything_without_verbose(lib, capsys):
+    many_subs_film(lib)
+    code, out, err = run(lib, capsys, "explain", f"source:{FOLDER}")
+    assert "info: subtitle.dropped_language" in out and "hidden" not in out
+
+
+def test_text_emit_hides_info_unless_verbose(lib, capsys):
+    many_subs_film(lib)
+    _c, out, _e = run(lib, capsys, "plan", "--emit", "text")
+    assert "info:" not in out and "info findings hidden" in out
+    _c, out, _e = run(lib, capsys, "plan", "--emit", "text", "-v")
+    assert "info: subtitle.dropped_language" in out

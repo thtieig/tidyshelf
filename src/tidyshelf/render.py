@@ -24,14 +24,19 @@ def _describe(op: dict) -> list[str]:
     return [f"  {op['op']:<8} {op['path']}"]
 
 
-def to_text(doc: dict) -> str:
+def finding_lines(findings: list, verbose: bool) -> list[str]:
+    shown, note = tidyshelf_apply.visible_findings(findings, verbose)
+    return [f"    {f['level']}: {f['code']}: {f['msg']}" for f in shown] + ([f"    {note}"] if note else [])
+
+
+def to_text(doc: dict, verbose: bool = False) -> str:
     items = doc["items"]
     counts = {s: sum(1 for it in items if it["status"] == s) for s in ("ready", "needs_review", "skipped")}
     lines = [f"plan {tidyshelf_apply.plan_id(doc)}: {len(items)} items ({counts['ready']} ready, "
              f"{counts['needs_review']} needs review, {counts['skipped']} skipped)"]
     for it in items:
         lines += ["", f"{it['id']}  {it['status']}  {it.get('source', '')}"]
-        lines += [f"    {f['level']}: {f['code']}: {f['msg']}" for f in it.get("findings", [])]
+        lines += finding_lines(it.get("findings", []), verbose)
         for op in it["ops"]:
             lines += _describe(op)
     return "\n".join(lines) + "\n"

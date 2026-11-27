@@ -37,6 +37,7 @@ class _Out:
     def __init__(self, args):
         self.json = args.json
         self.quiet = args.quiet
+        self.verbose = args.verbose
 
     def info(self, msg: str) -> None:
         if not self.quiet and not self.json:
@@ -57,6 +58,8 @@ def _common(parser: argparse.ArgumentParser, top: bool) -> None:
                         help="config file (default: $TIDYSHELF_CONFIG, then the usual locations)")
     parser.add_argument("--json", action="store_true", default=d(False), help="machine-readable output")
     parser.add_argument("--quiet", action="store_true", default=d(False), help="only print errors")
+    parser.add_argument("--verbose", "-v", action="store_true", default=d(False),
+                        help="show every finding (plan and run hide info findings by default)")
     parser.add_argument("--no-color", action="store_true", default=d(False), help="no colour in output")
 
 
@@ -186,12 +189,12 @@ def _exit_code(items: list[dict]) -> int:
     return 2 if any(it["ops"] for it in items) else 0
 
 
-def _summary_lines(items: list[dict], pid: str, out_path: str | None) -> list[str]:
+def _summary_lines(items: list[dict], pid: str, out_path: str | None, verbose: bool = False) -> list[str]:
     lines = []
     for it in items:
         target = _target(it)
         lines.append(f"{it['id']}  {it['status']}  {it['source']}" + (f" -> {target}" if target else ""))
-        lines += [f"    {f['level']}: {f['code']}: {f['msg']}" for f in it["findings"]]
+        lines += render.finding_lines(it["findings"], verbose)
     counts = {s: sum(1 for it in items if it["status"] == s) for s in ("ready", "needs_review", "skipped")}
     lines.append(f"plan {pid}: {len(items)} items ({counts['ready']} ready, {counts['needs_review']} needs review, "
                  f"{counts['skipped']} skipped)")
@@ -225,7 +228,7 @@ def cmd_plan(args, out: _Out) -> int:
     doc = plan.to_dict()
     pid, code = plan.plan_id, _exit_code(doc["items"])
     data = {"json": lambda: plan.dumps().encode("ascii"), "sh": lambda: render.to_sh(doc, cfg),
-            "text": lambda: render.to_text(doc).encode("utf-8", "backslashreplace")}[args.emit]()
+            "text": lambda: render.to_text(doc, args.verbose).encode("utf-8", "backslashreplace")}[args.emit]()
     to_stdout = args.out == "-" or (args.out is None and args.emit != "json")
     if to_stdout:
         sys.stdout.flush()
@@ -242,7 +245,7 @@ def cmd_plan(args, out: _Out) -> int:
         print(json.dumps(summary, indent=2, ensure_ascii=True), file=sys.stderr if to_stdout else sys.stdout)
     elif not args.quiet:
         stream = sys.stderr if to_stdout else sys.stdout
-        for line in _summary_lines(doc["items"], pid, args.out):
+        for line in _summary_lines(doc["items"], pid, args.out, args.verbose):
             print(line, file=stream)
     return code
 
@@ -268,7 +271,7 @@ def _passthrough(args) -> list[str]:
     for name in ("config",):
         if getattr(args, name, None):
             argv += [f"--{name}", getattr(args, name)]
-    for flag in ("execute", "yes", "allow_large_delete", "json", "quiet"):
+    for flag in ("execute", "yes", "allow_large_delete", "json", "quiet", "verbose"):
         if getattr(args, flag, False):
             argv.append("--" + flag.replace("_", "-"))
     if getattr(args, "approve", None):

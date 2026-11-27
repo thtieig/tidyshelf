@@ -914,6 +914,7 @@ class Executor:
 class Out:
     def __init__(self, args):
         self.json, self.quiet = args.json, args.quiet
+        self.verbose = getattr(args, "verbose", False)
 
     def info(self, msg: str = "") -> None:
         if not self.quiet and not self.json:
@@ -939,6 +940,16 @@ def _describe(op: dict) -> str:
     return f"{op['op']:<8} {op['path']}"
 
 
+def visible_findings(findings: list, verbose: bool) -> tuple[list, str | None]:
+    """Findings to print: all with verbose, else only warn and error, plus a note on what was hidden."""
+    if verbose:
+        return list(findings), None
+    shown = [f for f in findings if f["level"] != "info"]
+    hidden = len(findings) - len(shown)
+    note = f"({hidden} info finding{'s' * (hidden != 1)} hidden; --verbose to show)" if hidden else None
+    return shown, note
+
+
 def _print_plan(out: Out, items: list, pre: dict, pid: str, mode: str) -> None:
     counts = {s: sum(1 for it in items if it["status"] == s) for s in STATUSES}
     out.info(f"plan {pid}: {len(items)} items ({counts['ready']} ready, {counts['needs_review']} "
@@ -946,8 +957,11 @@ def _print_plan(out: Out, items: list, pre: dict, pid: str, mode: str) -> None:
     for item in items:
         res = pre.get(item["id"])
         out.info(f"\n{item['id']}  {item['status']}" + ("  REFUSED" if res and res["error"] else ""))
-        for f in item.get("findings", []):
+        shown, note = visible_findings(item.get("findings", []), out.verbose)
+        for f in shown:
             out.info(f"  {f['level']}: {f['code']}: {f['msg']}")
+        if note:
+            out.info(f"  {note}")
         for n, op in enumerate(item["ops"]):
             state = res["states"][n] if res else "?"
             out.info(f"  {_describe(op)}" + ("  [done]" if state == "done" else ""))
@@ -1253,6 +1267,7 @@ def build_parser() -> argparse.ArgumentParser:
                    help="reverse the moves a run of PLAN made (read from the journal next to it)")
     p.add_argument("--json", action="store_true", help="machine-readable output")
     p.add_argument("--quiet", action="store_true", help="only print errors")
+    p.add_argument("--verbose", "-v", action="store_true", help="also show info findings")
     p.add_argument("--no-color", action="store_true", help="no colour (output has none anyway)")
     p.add_argument("--version", action="version", version=f"tidyshelf-apply {VERSION}")
     return p

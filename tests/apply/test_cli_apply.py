@@ -137,3 +137,14 @@ def test_surrogate_names_round_trip_and_execute(env, monkeypatch):
     assert b"\\udce9" in out.buffer.getvalue() or b"\\xe9" in out.buffer.getvalue()
     journal = env.journal_path.read_bytes()
     assert journal.isascii()
+
+
+def test_dry_run_hides_info_findings_unless_verbose(env):
+    plan = movie_plan(env)
+    plan.items[0].finding("info", "x.y", "just so you know")
+    plan.items[0].finding("warn", "x.z", "look at this")
+    hidden = env.run(plan)
+    assert "warn: x.z: look at this" in hidden.out
+    assert "info: x.y" not in hidden.out and "(1 info finding hidden; --verbose to show)" in hidden.out
+    assert "info: x.y: just so you know" in env.run(plan, "--verbose").out
+    assert "info: x.y: just so you know" in env.run(plan, "-v").out
