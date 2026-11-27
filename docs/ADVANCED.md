@@ -1,7 +1,6 @@
 # Advanced configuration
 
-> Movies, series, quality and the audit are covered. Running plan and apply on different machines
-> (M6) is filled in as it lands.
+> For v0.1. Every option is also documented, with its default, in `defaults.toml`.
 
 Every setting, with its default and a comment, is in
 [`src/tidyshelf/data/defaults.toml`](../src/tidyshelf/data/defaults.toml).
@@ -177,6 +176,45 @@ Everything that is not a video or a subtitle, plus files matching `[junk] patter
 `"delete"` deletes it instead (capped by `[safety]`). Symlinks, special files, excluded paths and
 extras folders (`[parse] extras_folders`) are left untouched, and so is the folder that holds them.
 
+## Running it
+
+**On one machine** (the one that holds the files): `tidyshelf run [PATH...]` plans and then hands
+the plan to the same executor as `tidyshelf-apply`, as a dry-run. `tidyshelf run --execute` asks
+for the plan id and applies it. The plan is kept in `~/.local/state/tidyshelf/plans/` (or
+`$XDG_STATE_HOME`), with its journal next to it, so `tidyshelf undo <that plan>` works later.
+`--audit`, `--deep`, `--approve`, `--allow-large-delete` and `--on-error` work as for `plan` and
+`tidyshelf-apply`.
+
+**On two machines** (plan on your PC, apply on the NAS):
+
+```
+pc$  tidyshelf plan --out plan.json            # summary + plan id, e.g. a1b2c3d4e5f6
+pc$  tidyshelf build-apply                     # once: writes tidyshelf-apply.pyz
+pc$  scp plan.json tidyshelf-apply.pyz nas:
+nas$ python3 tidyshelf-apply.pyz plan.json     # dry-run, same summary and id
+nas$ python3 tidyshelf-apply.pyz plan.json --execute --approve a1b2c3d4e5f6
+```
+
+The NAS needs Python 3.11+ and a config of its own (`/etc/tidyshelf.toml`,
+`~/.config/tidyshelf/config.toml` or `--config`) with its `[roots]` as the NAS sees them, and, if
+you want them, `[owner]`, `[safety]` and `[exclude]`. The plan itself names folders only as
+`source:`, `movies:`, `series:`. Unattended: `tidyshelf plan --out - | ssh nas python3
+tidyshelf-apply.pyz - --execute --yes --approve <id>`.
+
+**As a shell script:** `tidyshelf plan --emit sh --out plan.sh` writes the plan as a bash script
+(root folders and owner/modes as variables at the top; dry-run unless `--execute`). It is for
+reading, or for a machine without Python. It keeps the checks shell can do (see SAFETY.md) but
+has no journal, no rollback and no lock. `--emit text` writes a readable listing.
+
+**Undo:** `tidyshelf undo plan.json` (or `tidyshelf-apply --undo plan.json`) puts moved files back
+and removes folders the run created, if empty; dry-run first, then `--execute`. Deleted files are
+not restored; with the default `junk_action = "trash"`, junk is in `.tidyshelf-trash/`.
+
+## Exit codes
+
+`0` nothing to do / done, `1` error, `2` the plan has changes (plan, dry-run), `3` a guardrail
+refused, `4` some items need review. With several, the first of 1, 3, 4, 2 wins.
+
 ## I want ...
 
 - *Plex-style names* — later (only the `kodi` preset exists today)
@@ -190,4 +228,5 @@ extras folders (`[parse] extras_folders`) are left untouched, and so is the fold
 - *a show that numbers episodes oddly* — see "How a series is read"; an `[[override]]` `season` fixes loose numbers
 - *a different quality policy* — `[video.quality]` (see above)
 - *to find damaged files* — `tidyshelf plan --deep`
-- *to run plan and apply on different machines* — (M6)
+- *to run plan and apply on different machines* — see "Running it"
+- *a script instead of the executor* — `tidyshelf plan --emit sh` (less safe)

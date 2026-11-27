@@ -90,6 +90,23 @@ not writable by group or others; otherwise the run is refused (move the file awa
   fails while running (a disk error, say), it stops, says how many moves were reversed, and can
   simply be run again. Deleted files are not restored (that is what the trash is for).
 
+## Running in one go, auditing, and the shell script
+
+- `tidyshelf run` writes the plan to a file and applies it with the same executor and checks;
+  there is no second code path. `--execute` still asks for the plan id.
+- `tidyshelf plan --audit` only plans moves inside a library or into the trash. Nothing is ever
+  deleted in a library: a folder a fix leaves empty is reported for you to remove by hand. Moving
+  library junk to `source:.tidyshelf-trash/` is refused if the library and the source are on
+  different filesystems (it is never copied).
+- Planning reads files only. With quality checks on, `ffprobe` (and `ffmpeg` for `--deep`) run on
+  each video: no shell, an absolute path, a time limit, read-only. Nothing is re-encoded.
+- `tidyshelf plan --emit sh` is **less safe** than `tidyshelf-apply`: no journal, no rollback, no
+  lock, and a wider gap between a check and its step. It still refuses, before the first step runs,
+  a file that changed (size, mtime), a symlink (as the file or any folder on the way), an existing
+  destination, a move across filesystems, a delete outside the source root, and more deletes than
+  `[safety]` allows (`ALLOW_LARGE_DELETE=1` lifts that); moves use `mv -n`. Names are quoted so
+  that no file name can run a command. It needs bash and GNU coreutils.
+
 ## Known limits
 
 - Between checking that a destination does not exist and the `rename`, another program could
