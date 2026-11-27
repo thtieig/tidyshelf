@@ -1,0 +1,117 @@
+{
+  "format": 1,
+  "tool": "tidyshelf 0.1.0.dev0",
+  "created": "2026-11-27T11:00:00Z",
+  "items": [
+    {
+      "id": "movie-0001",
+      "kind": "movie",
+      "status": "ready",
+      "source": "movies:Bright Harbour (2011)",
+      "findings": [],
+      "ops": [
+        {
+          "op": "mkdir",
+          "path": "movies:Bright Harbour (2011)/Subs"
+        },
+        {
+          "op": "mkdir",
+          "path": "source:.tidyshelf-trash/movies/Bright Harbour (2011)"
+        },
+        {
+          "op": "move",
+          "from": "movies:Bright Harbour (2011)/bright.harbour.2011.1080p.mkv",
+          "to": "movies:Bright Harbour (2011)/Bright Harbour (2011).mkv",
+          "size": 500,
+          "mtime": 1723000000
+        },
+        {
+          "op": "move",
+          "from": "movies:Bright Harbour (2011)/English.srt",
+          "to": "movies:Bright Harbour (2011)/Subs/Bright Harbour (2011).en.srt",
+          "size": 2650,
+          "mtime": 1723000000
+        },
+        {
+          "op": "move",
+          "from": "movies:Bright Harbour (2011)/cover.jpg",
+          "to": "source:.tidyshelf-trash/movies/Bright Harbour (2011)/cover.jpg",
+          "size": 40,
+          "mtime": 1723000000
+        },
+        {
+          "op": "set_mode",
+          "path": "movies:Bright Harbour (2011)/Subs"
+        },
+        {
+          "op": "set_mode",
+          "path": "movies:Bright Harbour (2011)/Bright Harbour (2011).mkv"
+        },
+        {
+          "op": "set_mode",
+          "path": "movies:Bright Harbour (2011)/Subs/Bright Harbour (2011).en.srt"
+        }
+      ]
+    },
+    {
+      "id": "movie-0002",
+      "kind": "movie",
+      "status": "ready",
+      "source": "movies:Winter.Lights.2004.720p",
+      "findings": [
+        {
+          "level": "info",
+          "code": "audit.empty_folder",
+          "msg": "movies:Winter.Lights.2004.720p will be empty; remove it by hand (tidyshelf never deletes in a library)"
+        }
+      ],
+      "ops": [
+        {
+          "op": "mkdir",
+          "path": "movies:Winter Lights (2004)"
+        },
+        {
+          "op": "move",
+          "from": "movies:Winter.Lights.2004.720p/Winter.Lights.2004.720p.mkv",
+          "to": "movies:Winter Lights (2004)/Winter Lights (2004).mkv",
+          "size": 400,
+          "mtime": 1723000000
+        },
+        {
+          "op": "set_mode",
+          "path": "movies:Winter Lights (2004)"
+        },
+        {
+          "op": "set_mode",
+          "path": "movies:Winter Lights (2004)/Winter Lights (2004).mkv"
+        }
+      ]
+    },
+    {
+      "id": "series-0001",
+      "kind": "series",
+      "status": "ready",
+      "source": "series:Harbour Lights",
+      "findings": [
+        {
+          "level": "info",
+          "code": "audit.empty_folder",
+          "msg": "series:Harbour Lights/Season 01 will be empty; remove it by hand (tidyshelf never deletes in a library)"
+        }
+      ],
+      "ops": [
+        {
+          "op": "move",
+          "from": "series:Harbour Lights/Season 01/Harbour.Lights.S01E01.Pilot.mkv",
+          "to": "series:Harbour Lights/Season 1/S01E01 - Pilot.mkv",
+          "size": 200,
+          "mtime": 1723000000
+        },
+        {
+          "op": "set_mode",
+          "path": "series:Harbour Lights/Season 1/S01E01 - Pilot.mkv"
+        }
+      ]
+    }
+  ]
+}

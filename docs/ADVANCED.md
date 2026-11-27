@@ -1,7 +1,7 @@
 # Advanced configuration
 
-> Movies, series and quality are covered. Audit (M5) and running plan and apply on different
-> machines (M6) are filled in as they land.
+> Movies, series, quality and the audit are covered. Running plan and apply on different machines
+> (M6) is filled in as it lands.
 
 Every setting, with its default and a comment, is in
 [`src/tidyshelf/data/defaults.toml`](../src/tidyshelf/data/defaults.toml).
@@ -153,6 +153,22 @@ with `ffmpeg` to find damaged files (slow); a file with errors needs review.
 
 When the library already has the movie, the finding shows both qualities so you can choose.
 
+## Auditing the library
+
+`tidyshelf plan --audit` looks at the movie and series libraries instead of the source and plans
+whatever is needed to make them follow the same standard: misnamed videos and episodes renamed,
+subtitles moved to `Subs/` (movies) or next to their episode (series) and named by language,
+`Season 01` merged into `Season 1`, junk and unwanted subtitles moved to
+`source:.tidyshelf-trash/movies/...` or `.../series/...`. It is a normal plan: read it, apply it
+with `tidyshelf-apply`.
+
+- A consistent library gives an **empty plan**. Folders with nothing to fix are left out; folders
+  with only a warning (a large file, a mislabelled subtitle) are listed as *skipped* so you see them.
+- tidyshelf never deletes anything in a library. When a fix leaves a folder empty (a renamed movie
+  folder, an old `Season 01`), the plan says so and you remove that folder by hand.
+- Two editions of one film (`Title (2004)` and `Title (2004) [ES]`) are not a clash.
+- The audit takes no PATH; it always checks both libraries.
+
 ## Junk
 
 Everything that is not a video or a subtitle, plus files matching `[junk] patterns` (samples,
@@ -170,6 +186,7 @@ extras folders (`[parse] extras_folders`) are left untouched, and so is the fold
 - *to skip a folder* — add a regex to `[exclude] patterns`, e.g. `'^movies:_keep-out(/|$)'`
 - *to fix one item by hand* — an `[[override]]` block (see above)
 - *to see why something was named that way* — `tidyshelf explain PATH`
+- *to check my existing library* — `tidyshelf plan --audit`
 - *a show that numbers episodes oddly* — see "How a series is read"; an `[[override]]` `season` fixes loose numbers
 - *a different quality policy* — `[video.quality]` (see above)
 - *to find damaged files* — `tidyshelf plan --deep`

@@ -1,0 +1,24 @@
+# A synthetic library that follows docs/NAMING.md, names only (invented titles).
+# One path per line, starting with the root: movies/ or series/.
+# The acceptance test builds it and expects `plan --audit` to be empty.
+movies/Old Mill (1987)/Old Mill (1987).mkv
+movies/Old Mill (1987)/Subs/Old Mill (1987).en.srt
+movies/Old Mill (1987)/Subs/Old Mill (1987).es.srt
+movies/Bright Harbour (2011) [ES]/Bright Harbour (2011) [ES].mp4
+movies/Night Ferry (1994) - (Studio Cut)/Night Ferry (1994) - (Studio Cut).mkv
+movies/Glass Orchard (2016)/Glass Orchard (2016).mkv
+movies/Glass Orchard (2016)/Subs/Glass Orchard (2016).en.sdh.srt
+movies/Glass Orchard (2016)/Subs/Glass Orchard (2016).it.forced.srt
+movies/Paper Lantern (2009)/Paper Lantern (2009).avi
+movies/Paper Lantern (2009)/Subs/Paper Lantern (2009).en.idx
+movies/Paper Lantern (2009)/Subs/Paper Lantern (2009).en.sub
+movies/W.L. (2004)/W.L. (2004).mkv
+series/Old Coast/Season 1/S01E01 - Arrival.mkv
+series/Old Coast/Season 1/S01E01 - Arrival.en.srt
+series/Old Coast/Season 1/S01E02-E03 - Two Parter.mkv
+series/Old Coast/Season 1/S01E04.mkv
+series/Old Coast/Season 00/S00E01 - Christmas.mkv
+series/Old Coast/Featurettes/making-of.mkv
+series/Harbour Lights (2019)/Season 11/S11E10 - Late Tide.mkv
+series/Harbour Lights (2019)/Season 11/S11E10 - Late Tide.es.srt
+series/Quiet Street/Season 2/S02E01.mkv

@@ -109,3 +109,9 @@ def test_audit_fix_then_audit_again_is_empty(lib, capsys, tmp_path):
     capsys.readouterr()
     (lib.roots["movies"] / "Winter.Lights.2004.720p").rmdir()  # the empty folder, removed by hand
     assert audit(lib) == []
+
+
+def test_audited_show_does_not_join_itself(lib):
+    lib.tree("series", "Harbour Lights/Season 1/Harbour.Lights.S01E01.mkv")
+    (item,) = audit(lib)
+    assert "series.joins_existing" not in codes(item)

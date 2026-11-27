@@ -4,8 +4,8 @@ Tidy a folder of video files in any naming state into a library with one consist
 Kodi/Jellyfin/Plex/Emby-portable naming standard. No AI, no network, no cloud: the same input
 and the same config always give the same plan.
 
-> **Status:** early development. Movies and series can be planned, checked for quality and
-> applied; `--audit` is still to come.
+> **Status:** early development (heading for v0.1). Movies and series can be planned, checked for
+> quality and applied, and the library can be audited.
 
 **It moves and can delete files.** Read the plan before applying it. Dry-run is the default.
 Keep backups. See [docs/SAFETY.md](docs/SAFETY.md).
@@ -42,6 +42,7 @@ tidyshelf plan --out plan.json        # changes nothing; prints each item and th
 tidyshelf explain "source:Some.Folder" # why one item is planned the way it is
 tidyshelf-apply plan.json             # dry-run: shows every step
 tidyshelf-apply plan.json --execute   # does it, after you type the plan id
+tidyshelf plan --audit --out fix.json # check the library itself; an empty plan means it is consistent
 ```
 
 Items the tool cannot decide (no year, several videos, a clash with the library) are marked
