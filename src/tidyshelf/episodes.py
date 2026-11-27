@@ -29,6 +29,11 @@ class Episode:
     bare: str | None = None  # a bare 3-digit number as written ("102", "096")
 
 
+def has_marker(name: str) -> bool:
+    """True for an S1M1-style name (an in-season marker that is not SxxEyy)."""
+    return bool(_MARKER.search(name)) and not _EXPLICIT.search(name)
+
+
 def season_from_folder(name: str) -> int | None:
     """Season of a folder named like "Season 4", "S04" or "Specials"; None for anything else."""
     text = name.strip()

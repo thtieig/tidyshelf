@@ -146,3 +146,16 @@ def test_extras_folder_left_in_a_show(lib):
     lib.tree("source", f"{PACK}/Harbour.Lights.S01E01.mkv\n{PACK}/Featurettes/making-of.mkv")
     item = only(lib)
     assert item["status"] == "ready" and not [op for op in item["ops"] if op["op"] == "delete"]
+
+
+def test_marker_files_in_a_plain_folder_are_a_series(lib):
+    lib.tree("source", "Harbour Lights/Harbour.Lights.S1M1.mkv\nHarbour Lights/Harbour.Lights.S1M2.mkv")
+    item = only(lib)
+    assert item["status"] == "ready"
+    assert sorted(moves(item).values()) == [f"{SHOW}/S01E01.mkv", f"{SHOW}/S01E02.mkv"]
+
+
+def test_joining_an_existing_show_is_reported(lib):
+    lib.tree("series", "Harbour Lights (2019)/Season 1/S01E01.mkv")
+    lib.tree("source", "Harbour.Lights.S01E02.mkv")
+    assert "series.joins_existing" in codes(only(lib))

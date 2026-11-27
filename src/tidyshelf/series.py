@@ -93,6 +93,8 @@ def plan_series(cand: Candidate, cfg: dict, state: PlanState, trace: list[str], 
     show = (index.get(f"{title} ({year})".casefold()) if year else None) or index.get(safe_name(title).casefold()) \
         or safe_name(title)
     show_ref = f"series:{show}"
+    if os.path.isdir(_real(cfg, show_ref)):
+        findings.append(("info", "series.joins_existing", f"joins the existing {show_ref} in the library"))
     trace.append(f"show {show_ref}" + (" (already in the library)" if os.path.isdir(_real(cfg, show_ref)) else ""))
 
     # Library and in-plan clashes.

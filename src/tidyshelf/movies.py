@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 import re
 
-from tidyshelf import parse, series
+from tidyshelf import episodes, parse, series
 from tidyshelf.itemops import (PlanState, Planned, _finish, _real, _video_bytes, analyse_subs, dropped_junk,
                                emit_ops)
 from tidyshelf.naming import MOVIE_FOLDER_RE, movie_names, safe_name, subtitle_stem
@@ -30,7 +30,8 @@ def plan_candidate(cand: Candidate, cfg: dict, state: PlanState) -> Planned:
     if name.ignore:
         return Planned(_finish(item, [], "skipped"), trace)
     forced_kind = override.get("kind") if override else None
-    if forced_kind == "series" or forced_kind is None and (name.kind == "series"
+    markers = any(episodes.has_marker(os.path.basename(v)) for v in cand.videos)  # S1M1: guessit says "movie"
+    if forced_kind == "series" or forced_kind is None and (name.kind == "series" or markers
                                                           or any(p.kind == "series" for p in video_ps)):
         return series.plan_series(cand, cfg, state, trace, override, folder_p)
     findings = list(name.findings)
