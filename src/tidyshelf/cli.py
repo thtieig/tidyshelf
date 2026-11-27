@@ -8,7 +8,7 @@ import os
 import sys
 from pathlib import Path
 
-from tidyshelf import __version__, config, movies
+from tidyshelf import __version__, config, movies, render
 
 INIT_TEMPLATE = """\
 # tidyshelf config. Only the three folders below are needed; every other setting has a default.
@@ -80,6 +80,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_plan.add_argument("paths", nargs="*", metavar="PATH", help="what to plan (default: the whole source root)")
     p_plan.add_argument("--out", metavar="FILE", help="write the plan to FILE, or - for stdout")
     p_plan.add_argument("--deep", action="store_true", help="also decode every video to find damaged files (slow)")
+    p_plan.add_argument("--emit", choices=("json", "sh", "text"), default="json",
+                        help="json: the plan (default); sh: a shell script (less safe); text: a readable listing")
     p_plan.add_argument("--audit", action="store_true",
                         help="check the movie and series libraries instead of the source (empty plan = consistent)")
 
@@ -175,9 +177,12 @@ def _summary_lines(items: list[dict], pid: str, out_path: str | None) -> list[st
     return lines
 
 
-def _write_atomic(path: Path, text: str) -> None:
+def _write_atomic(path: Path, data) -> None:
     tmp = path.with_name(f".{path.name}.tmp")
-    tmp.write_text(text, encoding="utf-8")
+    if isinstance(data, str):
+        tmp.write_text(data, encoding="utf-8")
+    else:
+        tmp.write_bytes(data)
     os.replace(tmp, path)
 
 
@@ -201,17 +206,24 @@ def cmd_plan(args, out: _Out) -> int:
         out.warn(msg)
     doc = plan.to_dict()
     pid, code = plan.plan_id, _exit_code(doc["items"])
-    if args.out == "-":
-        sys.stdout.write(plan.dumps())
+    data = {"json": lambda: plan.dumps().encode("ascii"), "sh": lambda: render.to_sh(doc, cfg),
+            "text": lambda: render.to_text(doc).encode("utf-8", "backslashreplace")}[args.emit]()
+    to_stdout = args.out == "-" or (args.out is None and args.emit != "json")
+    if to_stdout:
+        sys.stdout.flush()
+        sys.stdout.buffer.write(data)
+        sys.stdout.buffer.flush()
     elif args.out:
-        _write_atomic(Path(args.out), plan.dumps())
+        _write_atomic(Path(args.out), data)
+        if args.emit == "sh":
+            os.chmod(args.out, 0o755)
     if args.json:
         summary = {"plan_id": pid, "exit": code, "items": [
             {"id": it["id"], "status": it["status"], "kind": it["kind"], "source": it["source"],
              "target": _target(it), "findings": it["findings"]} for it in doc["items"]]}
-        print(json.dumps(summary, indent=2, ensure_ascii=True), file=sys.stderr if args.out == "-" else sys.stdout)
+        print(json.dumps(summary, indent=2, ensure_ascii=True), file=sys.stderr if to_stdout else sys.stdout)
     elif not args.quiet:
-        stream = sys.stderr if args.out == "-" else sys.stdout
+        stream = sys.stderr if to_stdout else sys.stdout
         for line in _summary_lines(doc["items"], pid, args.out):
             print(line, file=stream)
     return code
