@@ -1,0 +1,27 @@
+{
+  "streams": [
+    {
+      "index": 0,
+      "codec_type": "video",
+      "codec_name": "hevc",
+      "width": 3840,
+      "height": 2160,
+      "bit_rate": "60000000"
+    },
+    {
+      "index": 1,
+      "codec_type": "audio",
+      "codec_name": "aac",
+      "channels": 8,
+      "tags": {
+        "language": "eng"
+      }
+    }
+  ],
+  "format": {
+    "format_name": "matroska,webm",
+    "duration": "7200.000000",
+    "size": "60000000000",
+    "bit_rate": "66666666"
+  }
+}

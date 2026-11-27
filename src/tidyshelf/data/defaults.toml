@@ -86,6 +86,11 @@ extras_folders = ["Featurettes", "Extras"]
 [video]
 # Files with these extensions are videos (lowercase, with the dot).
 extensions = [".mkv", ".mp4", ".avi", ".m4v", ".wmv", ".ts", ".mpg", ".mpeg", ".mov", ".flv"]
+# Program used to read codec, resolution, duration and bitrate (name or full path).
+# Empty = do not check quality. Without it the plan is made anyway, with a warning.
+ffprobe = "ffprobe"
+# Program used by `plan --deep` to decode every frame and catch damaged files (name or full path).
+ffmpeg = "ffmpeg"
 
 [video.quality]
 # Quality policy, checked with ffprobe. Each check has an action: "ok" | "warn" | "reject".
