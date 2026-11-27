@@ -79,10 +79,10 @@ def leaves(paths: list[str]) -> list[str]:
     return [p for p in paths if not any(o.startswith(p + "/") for o in paths)]
 
 
-def analyse_subs(cand_subs: list[str], cfg: dict, base_dir: str, trace: list[str]):
+def analyse_subs(cand_subs: list[str], cfg: dict, base_dir: str, trace: list[str], video_name: str | None = None):
     """Analyse and choose the subtitles in `cand_subs`; adds one trace line per file."""
     rel_of = lambda ref: os.path.relpath(_real(cfg, ref), base_dir)  # noqa: E731
-    infos = [subtitles.analyse(_real(cfg, ref), ref, cfg) for ref in cand_subs]
+    infos = [subtitles.analyse(_real(cfg, ref), ref, cfg, video_name) for ref in cand_subs]
     choice = subtitles.choose(infos, cfg, rel_of)
     kept_refs = {s.ref: (lang, variant) for s, lang, variant in choice.keep}
     for s in infos:

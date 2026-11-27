@@ -72,7 +72,7 @@ def plan_candidate(cand: Candidate, cfg: dict, state: PlanState) -> Planned:
 
     # Subtitles.
     base_dir = cand.path if cand.is_dir else os.path.dirname(cand.path)
-    choice = analyse_subs(cand.subs, cfg, base_dir, trace)
+    choice = analyse_subs(cand.subs, cfg, base_dir, trace, os.path.basename(cand.videos[0].split(":", 1)[1]))
     findings += choice.findings
     if choice.review:
         return Planned(_finish(item, findings + left, review=choice.review), trace)

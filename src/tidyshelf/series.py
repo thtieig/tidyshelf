@@ -145,7 +145,7 @@ def plan_series(cand: Candidate, cfg: dict, state: PlanState, trace: list[str], 
     for e in eps:
         if not by_ep[e.ref]:
             continue
-        choice = analyse_subs(sorted(by_ep[e.ref]), cfg, base_dir, trace)
+        choice = analyse_subs(sorted(by_ep[e.ref]), cfg, base_dir, trace, e.ref.rsplit("/", 1)[-1])
         findings += choice.findings
         if choice.review:
             return review(f"{_label(e)}: {choice.review}", "subtitle.unknown_language")

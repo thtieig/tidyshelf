@@ -18,7 +18,7 @@ IMAGE_EXTS = (".idx", ".sub")
 MIN_CUES = 20  # fewer cues than this in a kept text subtitle is reported
 SDH_CUE_SHARE = 0.15  # share of cues that are sound descriptions for content to count as SDH
 _HASH_CHUNK = 1024 * 1024
-_SOUND_CUE = re.compile(r"^\s*[\[(♪]")
+_SOUND_CUE = re.compile(r"^\s*[\[(]")  # [MUSIC] (DOOR CLOSES); lyric lines are not SDH
 _TOKENS = re.compile(r"[\s._\-\[\]()]+")
 _IDX_ID = re.compile(rb"^id:\s*([A-Za-z]{2,3})\b", re.MULTILINE)
 
@@ -92,7 +92,7 @@ def _head(path: str, size: int) -> bytes:
         return fh.read(size)
 
 
-def analyse(path: str, ref: str, cfg: dict) -> SubInfo:
+def analyse(path: str, ref: str, cfg: dict, video_name: str | None = None) -> SubInfo:
     """Read one subtitle file (bounded) and describe it. Never changes the file."""
     subs = cfg["subtitles"]
     st = os.lstat(path)
@@ -110,7 +110,7 @@ def analyse(path: str, ref: str, cfg: dict) -> SubInfo:
         found = _IDX_ID.search(_head(path, 64 * 1024))
         if found:
             claimed = LANG_TAGS.get(found[1].decode("ascii").casefold(), claimed)
-    markers = set(tokens)
+    markers = set(tokens) - set(_name_tokens(video_name) if video_name else ())  # "Forced.Entry" is a title
     if markers & {m.casefold() for m in subs["forced_markers"]}:
         variant = "forced"
     elif markers & {m.casefold() for m in subs["sdh_markers"]}:

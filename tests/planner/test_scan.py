@@ -126,3 +126,15 @@ def test_fixture_files_have_a_fixed_mtime(lib):
     lib.tree("source", "A/a.mkv")
     lib.write("source", "A/a.srt", b"x")
     assert {os.lstat(lib.roots["source"] / "A" / n).st_mtime for n in ("a.mkv", "a.srt")} == {MTIME}
+
+
+def test_path_inside_a_candidate_selects_the_whole_candidate(lib):
+    lib.tree("source", "Film/w.mkv\nFilm/readme.txt\nOther/o.mkv")
+    (c,) = scan_source(lib.cfg, ["source:Film/w.mkv"])
+    assert c.ref == "source:Film" and c.junk == ["source:Film/readme.txt"]
+
+
+def test_path_to_a_loose_sidecar_selects_its_video(lib):
+    lib.tree("source", "Film.2000.mkv\nFilm.2000.en.srt")
+    (c,) = scan_source(lib.cfg, ["source:Film.2000.en.srt"])
+    assert c.ref == "source:Film.2000.mkv" and c.subs == ["source:Film.2000.en.srt"]

@@ -146,27 +146,22 @@ def _resolve(root: str, path: str) -> str:
 
 
 def scan_source(cfg: dict, paths: list[str] | None = None) -> list[Candidate]:
+    """Candidates of the source root, or the ones holding `paths` (a path inside a folder selects the
+    folder; a loose subtitle selects the video it belongs to)."""
     root, rules = cfg["roots"]["source"], _Rules(cfg)
-    if paths:
-        rels = []
-        for p in paths:
-            rel = _resolve(root, p)
-            if not os.path.lexists(os.path.join(root, rel)):
-                raise ValueError(f"{p}: not found in the source root")
-            rels.append(rel)
-        top = sorted(set(rels))
-        siblings = sorted({n for rel in top if "/" not in rel for n in os.listdir(root)
-                           if n != rel and not _skip_top(n)})
-    else:
-        top = [n for n in sorted(os.listdir(root)) if not _skip_top(n)]
-        siblings = []
-    top = [rel for rel in top if not rules.excluded(f"source:{rel}")]
-    cands = [_candidate(root, rel, rules) for rel in top]
-    extra = [_candidate(root, n, rules) for n in siblings if not rules.excluded(f"source:{n}")
-             and os.path.isfile(os.path.join(root, n)) and not os.path.islink(os.path.join(root, n))]
-    picked = {c.ref for c in cands}
-    attached = _attach_sidecars(cands + [c for c in extra if c.subs and not c.videos], root, rules)
-    return [c for c in attached if c.ref in picked]
+    top = [n for n in sorted(os.listdir(root)) if not _skip_top(n) and not rules.excluded(f"source:{n}")]
+    if not paths:
+        return _attach_sidecars([_candidate(root, n, rules) for n in top], root, rules)
+    wanted = set()
+    for p in paths:
+        rel = _resolve(root, p)
+        if not os.path.lexists(os.path.join(root, rel)):
+            raise ValueError(f"{p}: not found in the source root")
+        wanted.add(rel.split("/", 1)[0])
+    loose = {n for n in top if os.path.isfile(os.path.join(root, n)) and not os.path.islink(os.path.join(root, n))}
+    cands = _attach_sidecars([_candidate(root, n, rules) for n in top if n in wanted or n in loose], root, rules)
+    refs = {f"source:{n}" for n in wanted}
+    return [c for c in cands if c.ref in refs or any(s in refs for s in c.subs)]
 
 
 def library_index(cfg: dict) -> dict[str, str]:

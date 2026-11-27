@@ -236,3 +236,20 @@ def test_keep_sdh_alongside_keeps_forced_too(cfg, put):
     c = choose([forced, put("sdh.en.sdh.srt", "en_sdh.srt"), put("plain.en.srt", "en_plain.srt")], cfg, rel)
     assert sorted(kept(c)) == [("movie.en.forced.srt", "en", "forced"), ("plain.en.srt", "en", None),
                                ("sdh.en.sdh.srt", "en", "sdh")]
+
+
+def test_title_words_are_not_variant_markers(cfg):
+    folder = Path(cfg["roots"]["source"]) / "Film"
+    folder.mkdir(parents=True, exist_ok=True)
+    path = folder / "Forced.Entry.2004.en.srt"
+    path.write_bytes((SUBS / "en_plain.srt").read_bytes())
+    s = analyse(str(path), "source:Film/Forced.Entry.2004.en.srt", cfg, video_name="Forced.Entry.2004.mkv")
+    assert s.variant is None
+    s = analyse(str(path), "source:Film/Forced.Entry.2004.en.srt", cfg)
+    assert s.variant == "forced"  # without the video's name the word still counts
+
+
+def test_lyric_cues_are_not_sdh(put):
+    text = (SUBS / "en_plain.srt").read_text(encoding="utf-8")
+    lyrics = "".join(f"\n{900 + i}\n01:00:{i:02},000 --> 01:00:{i:02},900\n♪ la la la ♪\n" for i in range(20))
+    assert put("movie.en.srt", (text + lyrics).encode("utf-8")).variant is None
