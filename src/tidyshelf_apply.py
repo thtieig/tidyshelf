@@ -44,6 +44,7 @@ TRASH_DIR = ".tidyshelf-trash"
 LOCK_NAME = ".tidyshelf.lock"
 MAX_WRITE_BYTES = 5 * 1024 * 1024  # a write op carries at most this many bytes (and reads a source this size)
 WRITE_ROOTS = ("movies", "series")
+WRITE_EXTS = (".srt",)  # what a write may create (and be made from): cleaned text subtitles only
 SYSTEM_CONFIG = "/etc/tidyshelf.toml"
 ENV_VAR = "TIDYSHELF_CONFIG"
 EXIT_OK, EXIT_ERROR, EXIT_CHANGES, EXIT_REFUSED, EXIT_REVIEW = 0, 1, 2, 3, 4
@@ -308,6 +309,10 @@ def write_bytes(op: dict) -> bytes:
         raise PlanError(f"write: data is larger than {MAX_WRITE_BYTES} bytes")
     if hashlib.sha256(data).hexdigest() != op["sha256"]:
         raise PlanError("write: data does not match its sha256")
+    try:  # a write carries subtitle text only, never arbitrary bytes
+        data.decode("utf-8")
+    except UnicodeDecodeError:
+        raise PlanError("write: data is not UTF-8 text") from None
     return data
 
 
@@ -370,6 +375,8 @@ def _check_op(op, where: str, errors: list) -> None:
             errors.append(f"{where}: a write goes only into {' or '.join(WRITE_ROOTS)}")
         if refs["src"][0] != "source" or _in_trash(*refs["src"]):
             errors.append(f"{where}: a write is made from a file under source (not in {TRASH_DIR}/)")
+        if not (refs["to"][1].lower().endswith(WRITE_EXTS) and refs["src"][1].lower().endswith(WRITE_EXTS)):
+            errors.append(f"{where}: a write only makes {'/'.join(WRITE_EXTS)} subtitles, from one")
     if kind == "delete" and "path" in refs:
         root, rel = refs["path"]
         if root != "source":

@@ -332,3 +332,16 @@ def test_a_planted_journal_write_line_is_refused(env):
     r = run_undo(env, "--execute", "--yes")
     assert r.code == 3 and "not in the plan" in r.err
     assert dest(env).exists()
+
+
+@pytest.mark.parametrize("to", ["movies:A (2000)/Subs/run.sh", "movies:A (2000)/Subs/A (2000).mkv"])
+def test_write_only_makes_srt_files(env, to):
+    r = env.execute(write_plan(env, to=to))
+    assert r.code == 3 and "only makes .srt" in r.err
+    assert not (env.movies / "A (2000)" / "Subs" / "run.sh").exists()
+
+
+def test_write_data_must_be_utf8_text(env):
+    r = env.execute(write_plan(env, data=b"\xff\xfe\x00binary"))
+    assert r.code == 3 and "not UTF-8" in r.err
+    assert not dest(env).exists()

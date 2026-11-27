@@ -55,6 +55,8 @@ no subprocesses, no `eval`. It treats the plan as untrusted input, even though t
 - Only into the `movies` or `series` roots, only to a path that does not exist, with exactly the
   bytes in the plan: the plan id covers them, and `sha256(data)` must equal the plan's `sha256`.
   The data is at most 5 MiB (larger is refused when the plan is read).
+- Only `.srt` files, made from an `.srt`, and the data must be valid UTF-8 text: a plan cannot use a
+  write to put arbitrary bytes or a file of another type into a library.
 - Never over anything: the bytes go to a temporary file in the destination folder (opened with
   `O_EXCL`, no symlink followed, fsynced) which is hard-linked to the final name; a link cannot
   replace an existing path, even if one appears in the last moment. Where hard links are
